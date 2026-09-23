@@ -12,100 +12,139 @@
 <!-- The page talks to one place, the intake table, and loads nothing else. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://ncannxpmlcanpoqpsfmk.supabase.co; img-src data:; base-uri 'none'; form-action 'none'">
-<title>Leave your details</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpath d='M32 18v28M18 32h28' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>Let's stay in touch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%230f172a'/%3E%3Cpath d='M32 18v28M18 32h28' stroke='white' stroke-width='6' stroke-linecap='square'/%3E%3C/svg%3E">
 <style>
-  /* Kinetic Utility, as in the Mailroom page: pale ground, white card,
-     4px corners, 1px outlines, one blue spent only on what you can press. */
+  /* Kinetic Utility, with the Mailroom page's own tokens (build_app.py):
+     a pale blue-grey ground, white cards on 1px outlines, 4px corners,
+     mono micro-labels, a dark primary button, and blue kept for what you
+     can press. Fonts are local only — the stack falls through to the
+     phone's own, and nothing is fetched. */
   :root{
-    --bg:#f4f5f7; --card:#ffffff; --line:#dfe2e7; --text:#15181d;
-    --muted:#626a76; --blue:#2563eb; --blue-ink:#ffffff; --focus:#2563eb55;
-    --bad:#b42318; --bad-bg:#fdecea; --ok:#067647;
+    color-scheme:light;
+    --bg:#f8f9ff; --surface:#ffffff; --surface-lowest:#eff4ff; --surface-highest:#e5eeff;
+    --border:#e2e8f0; --btn-line:#94a3b8; --btn-line-hover:#475569;
+    --ink:#0f172a; --muted:#64748b; --muted-bright:#334155;
+    --primary:#0f172a; --primary-hover:#1e293b; --on-primary:#ffffff;
+    --accent:#2563eb; --accent-fill:rgba(37,99,235,.10); --focus-ring:rgba(37,99,235,.18);
+    --error:#ba1a1a; --error-fill:rgba(186,26,26,.09);
+    --r:4px;
+    --font-display:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-body:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
   }
   @media (prefers-color-scheme: dark){
     :root{
-      --bg:#0f1115; --card:#181b21; --line:#2c313a; --text:#e8eaed;
-      --muted:#9aa3ae; --blue:#4c86f5; --blue-ink:#ffffff; --focus:#4c86f566;
-      --bad:#ff8a80; --bad-bg:#3a1b1b; --ok:#5fd39a;
+      color-scheme:dark;
+      --bg:#0d1420; --surface:#131c2b; --surface-lowest:#0a1019; --surface-highest:#223146;
+      --border:#243247; --btn-line:#3d5170; --btn-line-hover:#6b83a6;
+      --ink:#eaf1ff; --muted:#8fa3bd; --muted-bright:#c3d2e6;
+      --primary:#ffffff; --primary-hover:#e2e2e2; --on-primary:#0d1420;
+      --accent:#5b8dff; --accent-fill:rgba(91,141,255,.16); --focus-ring:rgba(91,141,255,.28);
+      --error:#ffb4ab; --error-fill:rgba(255,180,171,.12);
     }
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
   body{
-    margin:0; background:var(--bg); color:var(--text);
-    font:17px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-    padding:max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    margin:0; background:var(--bg); color:var(--ink);
+    font:400 16px/1.6 var(--font-body); letter-spacing:-0.01em;
+    -webkit-font-smoothing:antialiased;
+    padding:max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
   }
   main{max-width:480px; margin:0 auto}
-  h1{font-size:26px; line-height:1.2; margin:12px 0 6px; letter-spacing:-.01em}
-  .lede{color:var(--muted); margin:0 0 20px}
-  .card{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:16px}
-  label{display:block; font-size:14px; font-weight:600; margin:0 0 6px}
-  label .opt{font-weight:400; color:var(--muted)}
-  .field{margin:0 0 16px}
-  input, textarea{
-    width:100%; font:inherit; color:var(--text); background:var(--card);
-    border:1px solid var(--line); border-radius:4px; padding:12px;
+  h1{font:700 28px/1.15 var(--font-display); letter-spacing:-0.04em; margin:8px 0 20px}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:20px 16px}
+  .f{margin:0 0 16px}
+  /* label-caps, as on every field in the app */
+  .f > label, .f > .lbl{display:block; margin:0 0 6px; color:var(--muted);
+    font:500 11px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase}
+  input, textarea, select{
+    width:100%; font:400 16px/1.4 var(--font-body); color:var(--ink);
+    background:var(--surface-lowest); border:1px solid var(--border); border-radius:var(--r);
     /* 16px or more, or iOS zooms the page on focus. */
-    font-size:17px; appearance:none; -webkit-appearance:none;
+    padding:12px; appearance:none; -webkit-appearance:none;
+    transition:border-color .12s, box-shadow .12s;
   }
   textarea{min-height:96px; resize:vertical}
-  input:focus, textarea:focus{outline:none; border-color:var(--blue); box-shadow:0 0 0 3px var(--focus)}
-  .hint{font-size:13px; color:var(--muted); margin:-8px 0 16px}
-  button{
-    width:100%; font:inherit; font-weight:600; font-size:18px;
-    border:0; border-radius:4px; padding:15px; cursor:pointer;
-    background:var(--blue); color:var(--blue-ink);
-  }
-  button[disabled]{opacity:.6}
-  button.quiet{background:transparent; color:var(--blue); border:1px solid var(--line); margin-top:12px}
-  .err{display:none; background:var(--bad-bg); color:var(--bad); border-radius:4px; padding:10px 12px; margin:0 0 16px; font-size:15px}
+  input:focus, textarea:focus, select:focus{outline:none; border-color:var(--primary); box-shadow:0 0 0 3px var(--focus-ring)}
+  .tel{display:flex; gap:8px}
+  .tel select{flex:0 0 112px; padding-right:28px; font-family:var(--font-mono); font-size:15px;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+    background-size:5px 5px; background-repeat:no-repeat}
+  .tel input{flex:1; min-width:0; font-family:var(--font-mono); letter-spacing:.02em}
+  /* What will be stored, as it is typed: the point of the country code is
+     a number that dials as it stands, and this is where that is shown. */
+  .saved{margin:6px 0 0; font:400 12px/1.4 var(--font-mono); color:var(--muted); min-height:17px}
+  .saved b{color:var(--ink); font-weight:600}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 8px}
+  .chip{font:500 14px/1 var(--font-body); padding:10px 12px; border-radius:var(--r);
+    border:1px solid var(--btn-line); background:var(--surface); color:var(--ink); cursor:pointer}
+  .chip[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-fill); color:var(--accent)}
+  input[type=date]{font-family:var(--font-mono); min-height:48px}
+  .btn{width:100%; font:600 16px/1 var(--font-body); border-radius:var(--r); padding:16px; cursor:pointer;
+    border:1px solid var(--primary); background:var(--primary); color:var(--on-primary)}
+  .btn:hover:not(:disabled){background:var(--primary-hover); border-color:var(--primary-hover)}
+  .btn:disabled{opacity:.35}
+  .btn.quiet{background:var(--surface); color:var(--ink); border-color:var(--btn-line); margin-top:16px}
+  .err{display:none; background:var(--error-fill); color:var(--error); border-radius:var(--r);
+    padding:10px 12px; margin:0 0 16px; font-size:14px}
   .err.show{display:block}
   .small{font-size:13px; color:var(--muted); margin:16px 0 0}
   /* A field real people never see. A bot filling every box fills this. */
   .trap{position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden}
-  .done{text-align:center; padding:28px 16px}
-  .done .tick{width:56px; height:56px; border-radius:50%; margin:0 auto 12px;
-    display:grid; place-items:center; background:var(--ok); color:var(--card); font-size:30px; font-weight:700}
-  .done h2{margin:0 0 6px; font-size:22px}
+  .done h2{font:700 22px/1.2 var(--font-display); letter-spacing:-0.03em; margin:0 0 8px}
   .done p{color:var(--muted); margin:0}
+  .done .when{margin-top:8px; font:400 13px/1.4 var(--font-mono); color:var(--muted-bright)}
   [hidden]{display:none !important}
 </style>
 </head>
 <body>
 <main>
-  <h1>Leave your details</h1>
-  <p class="lede">So Guy can stay in touch. It takes half a minute.</p>
+  <h1>Let's stay in touch!</h1>
 
   <form id="f" class="card" novalidate autocomplete="on">
     <div class="err" id="err" role="alert"></div>
 
-    <div class="field">
+    <div class="f">
       <label for="name">Name</label>
       <input id="name" name="name" autocomplete="name" maxlength="120" required
              autocapitalize="words" enterkeyhint="next">
     </div>
-    <div class="field">
+    <div class="f">
       <label for="email">Email</label>
       <input id="email" name="email" type="email" autocomplete="email" maxlength="200"
              inputmode="email" autocapitalize="off" spellcheck="false" enterkeyhint="next">
     </div>
-    <div class="field">
-      <label for="phone">Phone <span class="opt">(if you'd rather)</span></label>
-      <input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40"
-             inputmode="tel" enterkeyhint="next">
+    <div class="f">
+      <label for="phone">Phone</label>
+      <div class="tel">
+        <select id="cc" aria-label="Country code"></select>
+        <input id="phone" type="tel" autocomplete="tel-national" maxlength="40"
+               inputmode="tel" enterkeyhint="next" placeholder="06 1234 5678">
+      </div>
+      <p class="saved" id="saved" aria-live="polite"></p>
     </div>
-    <p class="hint">An email or a phone number — one is enough.</p>
-    <div class="field">
-      <label for="company">Company <span class="opt">(optional)</span></label>
+    <div class="f">
+      <label for="company">Company</label>
       <input id="company" name="company" autocomplete="organization" maxlength="120" enterkeyhint="next">
     </div>
-    <div class="field">
-      <label for="job_title">What you do <span class="opt">(optional)</span></label>
+    <div class="f">
+      <label for="job_title">What you do</label>
       <input id="job_title" name="job_title" autocomplete="organization-title" maxlength="120" enterkeyhint="next">
     </div>
-    <div class="field">
-      <label for="note">Anything else <span class="opt">(optional)</span></label>
+    <div class="f">
+      <span class="lbl" id="whenlbl">When shall we catch up?</span>
+      <div class="chips" role="group" aria-labelledby="whenlbl">
+        <button type="button" class="chip" data-days="7" aria-pressed="false">Next week</button>
+        <button type="button" class="chip" data-days="30" aria-pressed="false">In a month</button>
+        <button type="button" class="chip" data-days="91" aria-pressed="false">In 3 months</button>
+      </div>
+      <input id="follow_up" type="date" aria-labelledby="whenlbl">
+    </div>
+    <div class="f">
+      <label for="note">Anything else</label>
       <textarea id="note" name="note" maxlength="1000"></textarea>
     </div>
     <div class="trap" aria-hidden="true">
@@ -113,16 +152,16 @@
       <input id="website" name="website" tabindex="-1" autocomplete="off">
     </div>
 
-    <button id="add" type="submit">Add</button>
+    <button class="btn" id="add" type="submit">Add</button>
     <p class="small">Your details go to Guy van Koolwijk's contact list and
       nowhere else. Ask him any time to change or remove them.</p>
   </form>
 
   <section id="done" class="card done" hidden aria-live="polite">
-    <div class="tick" aria-hidden="true">✓</div>
     <h2 id="thanks">Thanks — you're added.</h2>
     <p>You can hand the phone back.</p>
-    <button class="quiet" id="again" type="button">Add another person</button>
+    <p class="when" id="donewhen"></p>
+    <button class="btn quiet" id="again" type="button">Add another person</button>
   </section>
 </main>
 
@@ -132,23 +171,107 @@
    back (supabase/intake.sql). */
 const ENDPOINT = 'https://ncannxpmlcanpoqpsfmk.supabase.co/rest/v1/intake';
 const KEY = 'sb_publishable_JQ7KwLaH_djKOh2k28EGYQ_HHbrZtcl';
-const FIELDS = ['name','email','phone','company','job_title','note'];
+const FIELDS = ['name','email','phone','company','job_title','note','follow_up'];
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const MAX_AHEAD_DAYS = 1095;      // mirrors the table's check
 
+/* [iso, name, calling code]. Netherlands first, then the places this
+   archive's mail comes from, then the rest alphabetically. */
+const COUNTRIES = [
+  ['NL','Netherlands','31'],['PT','Portugal','351'],['GB','United Kingdom','44'],
+  ['DE','Germany','49'],['BE','Belgium','32'],['FR','France','33'],['ES','Spain','34'],
+  ['US','United States','1'],
+  ['AR','Argentina','54'],['AU','Australia','61'],['AT','Austria','43'],['BR','Brazil','55'],
+  ['BG','Bulgaria','359'],['CA','Canada','1'],['CL','Chile','56'],['CN','China','86'],
+  ['CO','Colombia','57'],['HR','Croatia','385'],['CY','Cyprus','357'],['CZ','Czechia','420'],
+  ['DK','Denmark','45'],['EE','Estonia','372'],['FI','Finland','358'],['GR','Greece','30'],
+  ['HK','Hong Kong','852'],['HU','Hungary','36'],['IS','Iceland','354'],['IN','India','91'],
+  ['ID','Indonesia','62'],['IE','Ireland','353'],['IL','Israel','972'],['IT','Italy','39'],
+  ['JP','Japan','81'],['LV','Latvia','371'],['LT','Lithuania','370'],['LU','Luxembourg','352'],
+  ['MT','Malta','356'],['MX','Mexico','52'],['MA','Morocco','212'],['NZ','New Zealand','64'],
+  ['NG','Nigeria','234'],['NO','Norway','47'],['PL','Poland','48'],['RO','Romania','40'],
+  ['RS','Serbia','381'],['SG','Singapore','65'],['SK','Slovakia','421'],['SI','Slovenia','386'],
+  ['ZA','South Africa','27'],['KR','South Korea','82'],['SE','Sweden','46'],
+  ['CH','Switzerland','41'],['TH','Thailand','66'],['TR','Türkiye','90'],['UA','Ukraine','380'],
+  ['AE','United Arab Emirates','971'],['UY','Uruguay','598'],
+];
+/* Where the 0 in front is part of the number, not a trunk prefix. */
+const KEEPS_ZERO = new Set(['IT']);
+
+const flag = iso => String.fromCodePoint(...[...iso].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 const $ = id => document.getElementById(id);
-const form = $('f'), err = $('err'), add = $('add');
+const form = $('f'), err = $('err'), add = $('add'), cc = $('cc'), phone = $('phone');
+
+cc.innerHTML = COUNTRIES.map(([iso, name, code], i) =>
+  `<option value="${iso}"${i === 0 ? ' selected' : ''}>${flag(iso)} +${code} · ${name}</option>`).join('');
+/* Closed, the select shows only the flag and code; open, the whole name. */
+function shortLabel(){
+  for(const o of cc.options){
+    const [iso, name, code] = COUNTRIES.find(c => c[0] === o.value);
+    o.textContent = o.selected ? `${flag(iso)} +${code}` : `${flag(iso)} +${code} · ${name}`;
+  }
+}
+cc.addEventListener('focus', () => { for(const o of cc.options){
+  const [iso, name, code] = COUNTRIES.find(c => c[0] === o.value);
+  o.textContent = `${flag(iso)} +${code} · ${name}`; } });
+cc.addEventListener('blur', shortLabel);
+cc.addEventListener('change', () => { shortLabel(); showSaved(); });
+shortLabel();
+
+/* The one rule: what is stored is + and digits, ready to dial.
+   Typed with + or 00 in front, it is taken as typed and the picker is
+   ignored. Otherwise the picked code goes in front and the national 0
+   comes off (Italy keeps it), so NL + 0625084017 is +31625084017. */
+function e164(){
+  const raw = phone.value.trim();
+  let d = raw.replace(/[^\d+]/g, '');
+  if(!d.replace(/\+/g, '')) return '';
+  if(d.startsWith('+')) return '+' + d.slice(1).replace(/\+/g, '');
+  d = d.replace(/\+/g, '');
+  if(d.startsWith('00')) return '+' + d.slice(2);
+  const [iso, , code] = COUNTRIES.find(c => c[0] === cc.value);
+  if(code === '1' && d.length === 11 && d.startsWith('1')) d = d.slice(1);
+  else if(!KEEPS_ZERO.has(iso)) d = d.replace(/^0+/, '');
+  return '+' + code + d;
+}
+function showSaved(){
+  const n = e164();
+  $('saved').innerHTML = n ? `Saved as <b>${n}</b>` : '';
+}
+phone.addEventListener('input', showSaved);
+
+/* When to catch up: a chip fills the date, the date can be picked
+   directly, and pressing a lit chip again clears it. */
+const today = () => { const t = new Date(); t.setHours(12,0,0,0); return t; };
+const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
+  + '-' + String(d.getDate()).padStart(2,'0');
+const when = $('follow_up');
+when.min = iso(today());
+when.max = iso(new Date(today().getTime() + MAX_AHEAD_DAYS*864e5));
+document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+  const on = b.getAttribute('aria-pressed') === 'true';
+  document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
+  if(on){ when.value = ''; return; }
+  b.setAttribute('aria-pressed','true');
+  when.value = iso(new Date(today().getTime() + Number(b.dataset.days)*864e5));
+}));
+when.addEventListener('input', () =>
+  document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false')));
 
 function fail(msg, focus){
   err.textContent = msg; err.classList.add('show');
   if(focus) $(focus).focus();
+  window.scrollTo(0, 0);
 }
 
 function read(){
   const v = {};
-  for(const k of FIELDS){
+  for(const k of ['name','email','company','job_title','note']){
     const s = $(k).value.trim();
     if(s) v[k] = k === 'email' ? s.toLowerCase() : s;
   }
+  const p = e164(); if(p) v.phone = p;
+  if(when.value) v.follow_up = when.value;
   return v;
 }
 
@@ -159,16 +282,19 @@ form.addEventListener('submit', async ev => {
   if(!v.name) return fail('Please fill in your name.', 'name');
   if(!v.email && !v.phone) return fail('Please leave an email or a phone number.', 'email');
   if(v.email && !EMAIL.test(v.email)) return fail('That email address does not look right.', 'email');
+  if(v.phone && !/^\+\d{7,15}$/.test(v.phone))
+    return fail('That phone number does not look complete — check the country and the number.', 'phone');
+  if(v.follow_up && (v.follow_up < when.min || v.follow_up > when.max))
+    return fail('Pick a catch-up date from today up to three years ahead.', 'follow_up');
 
   /* A filled trap is a bot: say thanks and send nothing. */
-  if($('website').value) return showDone(v.name);
+  if($('website').value) return showDone(v);
 
   add.disabled = true; add.textContent = 'Adding…';
   try{
     const r = await fetch(ENDPOINT, {
       method:'POST',
-      headers:{'apikey':KEY, 'Content-Type':'application/json',
-               'Prefer':'return=minimal'},
+      headers:{'apikey':KEY, 'Content-Type':'application/json', 'Prefer':'return=minimal'},
       body:JSON.stringify(v),
     });
     if(!r.ok){
@@ -176,7 +302,7 @@ form.addEventListener('submit', async ev => {
       try{ detail = (await r.json()).message || ''; }catch(e){}
       throw new Error(detail || ('HTTP ' + r.status));
     }
-    showDone(v.name);
+    showDone(v);
   }catch(e){
     /* The typing stays in the boxes, so trying again costs nothing. */
     const offline = !navigator.onLine || e instanceof TypeError;
@@ -188,10 +314,16 @@ form.addEventListener('submit', async ev => {
   }
 });
 
-function showDone(name){
-  const first = String(name).split(/\s+/)[0];
+function showDone(v){
+  const first = String(v.name).split(/\s+/)[0];
   $('thanks').textContent = 'Thanks, ' + first + " — you're added.";
+  $('donewhen').textContent = v.follow_up
+    ? 'Catch-up noted for ' + new Date(v.follow_up + 'T12:00').toLocaleDateString('en-GB',
+        {weekday:'long', day:'numeric', month:'long', year:'numeric'}) + '.'
+    : '';
   form.reset();
+  document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
+  cc.value = COUNTRIES[0][0]; shortLabel(); showSaved();
   form.hidden = true; $('done').hidden = false;
   window.scrollTo(0, 0);
 }
