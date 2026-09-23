@@ -87,7 +87,21 @@
     white-space:nowrap; text-align:center; letter-spacing:-0.01em; min-width:0}
   @media (max-width: 350px){ .chip{font-size:12px; padding:12px 2px} }
   .chip[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-fill); color:var(--accent)}
-  input[type=date]{font-family:var(--font-mono); min-height:48px}
+  /* The date is a button too (asked for 2026-09-23: a bare date field did
+     not read as something that opens a calendar). The real input lies
+     invisibly over the button, so a tap lands on it and the phone opens
+     its own picker — the one way that works on every iPhone. */
+  .f > .pick{position:relative; display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%; font:500 15px/1 var(--font-body); padding:14px 12px; border-radius:var(--r);
+    border:1px solid var(--btn-line); background:var(--surface); color:var(--ink);
+    white-space:nowrap; overflow:hidden; margin:0; text-transform:none; letter-spacing:-0.01em; cursor:pointer}
+  .f > .pick.lit{border-color:var(--accent); background:var(--accent-fill); color:var(--accent)}
+  .f > .pick.set{font-family:var(--font-mono); font-size:14px}
+  .f > .pick:focus-within{box-shadow:0 0 0 3px var(--focus-ring)}
+  .pick input{position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0;
+    opacity:0; border:0; cursor:pointer; font-size:16px; -webkit-appearance:none; appearance:none}
+  .pick input::-webkit-calendar-picker-indicator{position:absolute; inset:0; width:auto; height:auto;
+    opacity:0; cursor:pointer}
   .btn{width:100%; font:600 16px/1 var(--font-body); border-radius:var(--r); padding:16px; cursor:pointer;
     border:1px solid var(--primary); background:var(--primary); color:var(--on-primary)}
   .btn:hover:not(:disabled){background:var(--primary-hover); border-color:var(--primary-hover)}
@@ -146,7 +160,10 @@
         <button type="button" class="chip" data-days="30" aria-pressed="false">In a month</button>
         <button type="button" class="chip" data-days="91" aria-pressed="false">In 3 months</button>
       </div>
-      <input id="follow_up" type="date" aria-labelledby="whenlbl">
+      <label class="pick" id="pick">
+        <span aria-hidden="true">📅</span><span id="picklbl">Pick a date</span>
+        <input id="follow_up" type="date" aria-label="Pick a date to catch up">
+      </label>
     </div>
     <div class="f">
       <label for="note">Anything else</label>
@@ -253,15 +270,36 @@ const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
 const when = $('follow_up');
 when.min = iso(today());
 when.max = iso(new Date(today().getTime() + MAX_AHEAD_DAYS*864e5));
+/* The button says the date whichever way it was set, so a chip's date is
+   visible too; it is lit only when the date came from the calendar. */
+function showPick(fromCalendar){
+  const pick = $('pick'), lbl = $('picklbl');
+  if(when.value){
+    lbl.textContent = new Date(when.value + 'T12:00').toLocaleDateString('en-GB',
+      {weekday:'long', day:'numeric', month:'long'});
+    pick.classList.add('set');
+  }else{
+    lbl.textContent = 'Pick a date';
+    pick.classList.remove('set');
+  }
+  pick.classList.toggle('lit', !!(fromCalendar && when.value));
+}
 document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
   const on = b.getAttribute('aria-pressed') === 'true';
   document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
-  if(on){ when.value = ''; return; }
-  b.setAttribute('aria-pressed','true');
-  when.value = iso(new Date(today().getTime() + Number(b.dataset.days)*864e5));
+  when.value = on ? '' : iso(new Date(today().getTime() + Number(b.dataset.days)*864e5));
+  if(!on) b.setAttribute('aria-pressed','true');
+  showPick(false);
 }));
-when.addEventListener('input', () =>
-  document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false')));
+/* On a desktop a click on a date field only focuses it; ask for the
+   calendar explicitly where the browser can. A phone opens it on tap. */
+when.addEventListener('click', () => { try{ when.showPicker(); }catch(e){} });
+const picked = () => {
+  document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
+  showPick(true);
+};
+when.addEventListener('input', picked);
+when.addEventListener('change', picked);
 
 function fail(msg, focus){
   err.textContent = msg; err.classList.add('show');
@@ -328,6 +366,7 @@ function showDone(v){
     : '';
   form.reset();
   document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
+  showPick(false);
   cc.value = COUNTRIES[0][0]; shortLabel(); showSaved();
   form.hidden = true; $('done').hidden = false;
   window.scrollTo(0, 0);
