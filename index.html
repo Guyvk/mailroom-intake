@@ -78,9 +78,14 @@
      a number that dials as it stands, and this is where that is shown. */
   .saved{margin:6px 0 0; font:400 12px/1.4 var(--font-mono); color:var(--muted); min-height:17px}
   .saved b{color:var(--ink); font-weight:600}
-  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 8px}
-  .chip{font:500 14px/1 var(--font-body); padding:10px 12px; border-radius:var(--r);
-    border:1px solid var(--btn-line); background:var(--surface); color:var(--ink); cursor:pointer}
+  /* Always one row. Three equal columns rather than wrapping chips: on an
+     iPhone 8 (375pt) the card leaves 309px, and three chips at their
+     natural width came to 315 and put the third on a line of its own. */
+  .chips{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; margin:0 0 8px}
+  .chip{font:500 14px/1 var(--font-body); padding:12px 4px; border-radius:var(--r);
+    border:1px solid var(--btn-line); background:var(--surface); color:var(--ink); cursor:pointer;
+    white-space:nowrap; text-align:center; letter-spacing:-0.01em; min-width:0}
+  @media (max-width: 350px){ .chip{font-size:12px; padding:12px 2px} }
   .chip[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-fill); color:var(--accent)}
   input[type=date]{font-family:var(--font-mono); min-height:48px}
   .btn{width:100%; font:600 16px/1 var(--font-body); border-radius:var(--r); padding:16px; cursor:pointer;
