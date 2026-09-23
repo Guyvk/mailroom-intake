@@ -11,9 +11,12 @@
 <meta name="referrer" content="no-referrer">
 <!-- The page talks to one place, the intake table, and loads nothing else. -->
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://ncannxpmlcanpoqpsfmk.supabase.co; img-src data:; base-uri 'none'; form-action 'none'">
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://ncannxpmlcanpoqpsfmk.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>Let's stay in touch</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%230f172a'/%3E%3Cpath d='M32 18v28M18 32h28' stroke='white' stroke-width='6' stroke-linecap='square'/%3E%3C/svg%3E">
+<!-- The home-screen icon: iOS wants a PNG and rounds the corners itself
+     (icon.svg is its source). A person and a +, on the app's navy. -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180' width='180' height='180'%3E %3Crect width='180' height='180' fill='#0f172a'/%3E %3Ccircle cx='72' cy='61' r='24' fill='#ffffff'/%3E %3Cpath d='M30 131 a42 42 0 0 1 84 0 z' fill='#ffffff'/%3E %3Ccircle cx='122' cy='115' r='29' fill='#2563eb' stroke='#0f172a' stroke-width='7'/%3E %3Cpath d='M122 101 v28 M108 115 h28' stroke='#ffffff' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   /* Kinetic Utility, with the Mailroom page's own tokens (build_app.py):
      a pale blue-grey ground, white cards on 1px outlines, 4px corners,
