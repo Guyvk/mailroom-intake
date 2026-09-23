@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Add me">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<!-- The page talks to one place, the intake table, and loads nothing else. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://ncannxpmlcanpoqpsfmk.supabase.co; img-src data:; base-uri 'none'; form-action 'none'">
+<title>Leave your details</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpath d='M32 18v28M18 32h28' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  /* Kinetic Utility, as in the Mailroom page: pale ground, white card,
+     4px corners, 1px outlines, one blue spent only on what you can press. */
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --line:#dfe2e7; --text:#15181d;
+    --muted:#626a76; --blue:#2563eb; --blue-ink:#ffffff; --focus:#2563eb55;
+    --bad:#b42318; --bad-bg:#fdecea; --ok:#067647;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1115; --card:#181b21; --line:#2c313a; --text:#e8eaed;
+      --muted:#9aa3ae; --blue:#4c86f5; --blue-ink:#ffffff; --focus:#4c86f566;
+      --bad:#ff8a80; --bad-bg:#3a1b1b; --ok:#5fd39a;
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:17px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    padding:max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  main{max-width:480px; margin:0 auto}
+  h1{font-size:26px; line-height:1.2; margin:12px 0 6px; letter-spacing:-.01em}
+  .lede{color:var(--muted); margin:0 0 20px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:16px}
+  label{display:block; font-size:14px; font-weight:600; margin:0 0 6px}
+  label .opt{font-weight:400; color:var(--muted)}
+  .field{margin:0 0 16px}
+  input, textarea{
+    width:100%; font:inherit; color:var(--text); background:var(--card);
+    border:1px solid var(--line); border-radius:4px; padding:12px;
+    /* 16px or more, or iOS zooms the page on focus. */
+    font-size:17px; appearance:none; -webkit-appearance:none;
+  }
+  textarea{min-height:96px; resize:vertical}
+  input:focus, textarea:focus{outline:none; border-color:var(--blue); box-shadow:0 0 0 3px var(--focus)}
+  .hint{font-size:13px; color:var(--muted); margin:-8px 0 16px}
+  button{
+    width:100%; font:inherit; font-weight:600; font-size:18px;
+    border:0; border-radius:4px; padding:15px; cursor:pointer;
+    background:var(--blue); color:var(--blue-ink);
+  }
+  button[disabled]{opacity:.6}
+  button.quiet{background:transparent; color:var(--blue); border:1px solid var(--line); margin-top:12px}
+  .err{display:none; background:var(--bad-bg); color:var(--bad); border-radius:4px; padding:10px 12px; margin:0 0 16px; font-size:15px}
+  .err.show{display:block}
+  .small{font-size:13px; color:var(--muted); margin:16px 0 0}
+  /* A field real people never see. A bot filling every box fills this. */
+  .trap{position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden}
+  .done{text-align:center; padding:28px 16px}
+  .done .tick{width:56px; height:56px; border-radius:50%; margin:0 auto 12px;
+    display:grid; place-items:center; background:var(--ok); color:var(--card); font-size:30px; font-weight:700}
+  .done h2{margin:0 0 6px; font-size:22px}
+  .done p{color:var(--muted); margin:0}
+  [hidden]{display:none !important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Leave your details</h1>
+  <p class="lede">So Guy can stay in touch. It takes half a minute.</p>
+
+  <form id="f" class="card" novalidate autocomplete="on">
+    <div class="err" id="err" role="alert"></div>
+
+    <div class="field">
+      <label for="name">Name</label>
+      <input id="name" name="name" autocomplete="name" maxlength="120" required
+             autocapitalize="words" enterkeyhint="next">
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" maxlength="200"
+             inputmode="email" autocapitalize="off" spellcheck="false" enterkeyhint="next">
+    </div>
+    <div class="field">
+      <label for="phone">Phone <span class="opt">(if you'd rather)</span></label>
+      <input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40"
+             inputmode="tel" enterkeyhint="next">
+    </div>
+    <p class="hint">An email or a phone number — one is enough.</p>
+    <div class="field">
+      <label for="company">Company <span class="opt">(optional)</span></label>
+      <input id="company" name="company" autocomplete="organization" maxlength="120" enterkeyhint="next">
+    </div>
+    <div class="field">
+      <label for="job_title">What you do <span class="opt">(optional)</span></label>
+      <input id="job_title" name="job_title" autocomplete="organization-title" maxlength="120" enterkeyhint="next">
+    </div>
+    <div class="field">
+      <label for="note">Anything else <span class="opt">(optional)</span></label>
+      <textarea id="note" name="note" maxlength="1000"></textarea>
+    </div>
+    <div class="trap" aria-hidden="true">
+      <label for="website">Website</label>
+      <input id="website" name="website" tabindex="-1" autocomplete="off">
+    </div>
+
+    <button id="add" type="submit">Add</button>
+    <p class="small">Your details go to Guy van Koolwijk's contact list and
+      nowhere else. Ask him any time to change or remove them.</p>
+  </form>
+
+  <section id="done" class="card done" hidden aria-live="polite">
+    <div class="tick" aria-hidden="true">✓</div>
+    <h2 id="thanks">Thanks — you're added.</h2>
+    <p>You can hand the phone back.</p>
+    <button class="quiet" id="again" type="button">Add another person</button>
+  </section>
+</main>
+
+<script>
+/* The publishable key is meant to be public: the table it reaches lets it
+   insert one row and do nothing else — no reading, not even its own row
+   back (supabase/intake.sql). */
+const ENDPOINT = 'https://ncannxpmlcanpoqpsfmk.supabase.co/rest/v1/intake';
+const KEY = 'sb_publishable_JQ7KwLaH_djKOh2k28EGYQ_HHbrZtcl';
+const FIELDS = ['name','email','phone','company','job_title','note'];
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+const $ = id => document.getElementById(id);
+const form = $('f'), err = $('err'), add = $('add');
+
+function fail(msg, focus){
+  err.textContent = msg; err.classList.add('show');
+  if(focus) $(focus).focus();
+}
+
+function read(){
+  const v = {};
+  for(const k of FIELDS){
+    const s = $(k).value.trim();
+    if(s) v[k] = k === 'email' ? s.toLowerCase() : s;
+  }
+  return v;
+}
+
+form.addEventListener('submit', async ev => {
+  ev.preventDefault();
+  err.classList.remove('show');
+  const v = read();
+  if(!v.name) return fail('Please fill in your name.', 'name');
+  if(!v.email && !v.phone) return fail('Please leave an email or a phone number.', 'email');
+  if(v.email && !EMAIL.test(v.email)) return fail('That email address does not look right.', 'email');
+
+  /* A filled trap is a bot: say thanks and send nothing. */
+  if($('website').value) return showDone(v.name);
+
+  add.disabled = true; add.textContent = 'Adding…';
+  try{
+    const r = await fetch(ENDPOINT, {
+      method:'POST',
+      headers:{'apikey':KEY, 'Content-Type':'application/json',
+               'Prefer':'return=minimal'},
+      body:JSON.stringify(v),
+    });
+    if(!r.ok){
+      let detail = '';
+      try{ detail = (await r.json()).message || ''; }catch(e){}
+      throw new Error(detail || ('HTTP ' + r.status));
+    }
+    showDone(v.name);
+  }catch(e){
+    /* The typing stays in the boxes, so trying again costs nothing. */
+    const offline = !navigator.onLine || e instanceof TypeError;
+    fail(offline
+      ? 'No connection just now. Your details are still here — try Add again in a moment.'
+      : 'That did not go through (' + e.message + '). Your details are still here — try again.');
+  }finally{
+    add.disabled = false; add.textContent = 'Add';
+  }
+});
+
+function showDone(name){
+  const first = String(name).split(/\s+/)[0];
+  $('thanks').textContent = 'Thanks, ' + first + " — you're added.";
+  form.reset();
+  form.hidden = true; $('done').hidden = false;
+  window.scrollTo(0, 0);
+}
+
+$('again').addEventListener('click', () => {
+  $('done').hidden = true; form.hidden = false;
+  err.classList.remove('show');
+  $('name').focus();
+});
+</script>
+</body>
+</html>
