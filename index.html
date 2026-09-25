@@ -180,6 +180,8 @@
     <button class="btn" id="add" type="submit">Add</button>
     <p class="small">Your details go to Guy van Koolwijk's contact list and
       nowhere else. Ask him any time to change or remove them.</p>
+    <p class="small" id="where" hidden>📍 Where we met is noted too, from this
+      phone's location.</p>
   </form>
 
   <section id="done" class="card done" hidden aria-live="polite">
@@ -196,9 +198,12 @@
    back (supabase/intake.sql). */
 const ENDPOINT = 'https://ncannxpmlcanpoqpsfmk.supabase.co/rest/v1/intake';
 const KEY = 'sb_publishable_JQ7KwLaH_djKOh2k28EGYQ_HHbrZtcl';
-const FIELDS = ['name','email','phone','company','job_title','note','follow_up'];
+const FIELDS = ['name','email','phone','company','job_title','note','follow_up',
+                'latitude','longitude','accuracy_m'];
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MAX_AHEAD_DAYS = 1095;      // mirrors the table's check
+const MAX_ACCURACY_M = 100000;    // mirrors the table's check
+const FIX_FRESH_MS = 30*60e3;     // a position older than this is not "here"
 
 /* [iso, name, calling code]. Netherlands first, then the places this
    archive's mail comes from, then the rest alphabetically. */
@@ -304,6 +309,28 @@ const picked = () => {
 when.addEventListener('input', picked);
 when.addEventListener('change', picked);
 
+/* Where the form is filled in, from this phone (asked for 2026-09-25).
+   Asked for when the page opens, so the permission prompt comes up while
+   Guy still holds the phone, and again whenever the page comes back into
+   view — a home-screen app is reopened, not reloaded. Never waited for:
+   no position, a refusal or a timeout just means the entry goes without
+   one. The line under Add says it is noted, and only once it is. */
+let FIX = null;
+function locate(){
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(p => {
+    const {latitude, longitude, accuracy} = p.coords;
+    if(!(accuracy >= 0 && accuracy <= MAX_ACCURACY_M)) return;
+    FIX = {latitude, longitude, accuracy_m:Math.round(accuracy), at:Date.now()};
+    $('where').hidden = false;
+  }, () => {}, {enableHighAccuracy:true, timeout:20000, maximumAge:120000});
+}
+const freshFix = () => FIX && Date.now() - FIX.at < FIX_FRESH_MS ? FIX : null;
+locate();
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') locate();
+});
+
 function fail(msg, focus){
   err.textContent = msg; err.classList.add('show');
   if(focus) $(focus).focus();
@@ -318,6 +345,12 @@ function read(){
   }
   const p = e164(); if(p) v.phone = p;
   if(when.value) v.follow_up = when.value;
+  const fix = freshFix();
+  if(fix){
+    v.latitude = +fix.latitude.toFixed(5);
+    v.longitude = +fix.longitude.toFixed(5);
+    v.accuracy_m = fix.accuracy_m;
+  }
   return v;
 }
 
@@ -377,6 +410,7 @@ function showDone(v){
 
 $('again').addEventListener('click', () => {
   $('done').hidden = true; form.hidden = false;
+  locate();
   err.classList.remove('show');
   $('name').focus();
 });
