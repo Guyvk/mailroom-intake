@@ -139,6 +139,9 @@
   @media (prefers-reduced-motion: reduce){ .rec.on .dot{animation:none; box-shadow:0 0 0 6px var(--rec-ring)} }
   .said{border:1px solid var(--rec); border-radius:var(--r); padding:12px; margin:0 0 16px}
   .said .hint{margin:6px 0 0; font-size:13px; color:var(--muted)}
+  .langs{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+  .langs button{font:500 14px/1 var(--font-body); padding:10px 12px; border-radius:var(--r);
+    border:1px solid var(--btn-line); background:var(--surface); color:var(--ink); cursor:pointer}
   input.heard, textarea.heard{border-color:var(--accent); background:var(--accent-fill)}
   [hidden]{display:none !important}
 </style>
@@ -154,6 +157,7 @@
       <label for="voice">What you said</label>
       <textarea id="voice" maxlength="2000" placeholder="Say your name, your email or number, and what you do."></textarea>
       <p class="hint" id="saidhint" aria-live="polite"></p>
+      <div class="langs" id="langs" hidden role="group" aria-label="Which language?"></div>
     </div>
 
     <div class="f">
@@ -389,6 +393,7 @@ function read(){
 form.addEventListener('submit', async ev => {
   ev.preventDefault();
   err.classList.remove('show');
+  if(said.value.trim()) fromVoice(said.value);
   const v = read();
   if(!v.name) return fail('Please fill in your name.', 'name');
   if(!v.email && !v.phone) return fail('Please leave an email or a phone number.', 'email');
@@ -461,30 +466,55 @@ $('again').addEventListener('click', () => {
    entry, and the Mac fills in the rest (company, what they do, a catch-up
    date) when it collects it. Where the browser cannot listen, the button
    opens the box and the keyboard's own microphone does the same job. */
+/* Two ways to listen, and which one depends on how the page was opened.
+   Opened from the home-screen icon — how Guy always opens it — iOS does
+   not give a web app the speech recogniser at all (only Safari has it),
+   so there the button opens "What you said" with the keyboard up and the
+   keyboard's own microphone does the listening: 🎙 to speak, 🌐 for
+   another language. In Safari the recogniser is used, and if it fails the
+   form asks which language and tries again. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let REC = null, LISTENING = false, KEPT = '', HEARD = false, RESTARTS = 0, WATCH = 0;
+const HOMESCREEN = navigator.standalone === true
+  || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+let REC = null, LISTENING = false, KEPT = '', HEARD = false, GOT = false, RESTARTS = 0, WATCH = 0;
 const said = $('voice');
 const hint = msg => { $('saidhint').textContent = msg; };
 
-/* A locale the phone's recogniser knows. The phone's own setting can be
-   a mix it does not ("en-NL": English, set in the Netherlands), and then
-   it fails without a word — so the language is kept and the region
-   replaced by one that exists. */
-const KNOWN = {en:['US','GB','AU','CA','IN','IE','NZ','ZA'], nl:['NL','BE'],
-  pt:['PT','BR'], de:['DE','AT','CH'], fr:['FR','BE','CA','CH'], es:['ES','MX','US'], it:['IT']};
-const HOME = {en:'GB', nl:'NL', pt:'PT', de:'DE', fr:'FR', es:'ES', it:'IT'};
+const LANGS = [['en-GB','English'],['nl-NL','Nederlands'],['pt-PT','Português'],
+  ['de-DE','Deutsch'],['fr-FR','Français'],['es-ES','Español'],['it-IT','Italiano']];
+/* A locale the recogniser knows: the phone's own can be a mix it does not
+   ("en-NL"), so the language is kept and the region made one that exists.
+   A language picked after a failure wins, for the rest of the session. */
+let PICKED = '';
 function speechLang(){
-  const [l, r] = String(navigator.language || 'en-GB').split('-');
-  const lang = (l || 'en').toLowerCase(), reg = (r || '').toUpperCase();
-  if(!KNOWN[lang]) return 'en-GB';
-  return lang + '-' + (KNOWN[lang].includes(reg) ? reg : HOME[lang]);
+  if(PICKED) return PICKED;
+  const l = String(navigator.language || 'en').split('-')[0].toLowerCase();
+  const hit = LANGS.find(([code]) => code.startsWith(l + '-'));
+  return hit ? hit[0] : 'en-GB';
 }
+function askLanguage(why){
+  hint(why + ' Which language will you speak?');
+  const box = $('langs');
+  box.innerHTML = LANGS.map(([code, name]) =>
+    `<button type="button" data-lang="${code}">${name}</button>`).join('');
+  box.hidden = false;
+}
+$('langs').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-lang]');
+  if(!b) return;
+  PICKED = b.dataset.lang;
+  $('langs').hidden = true;
+  startVoice();                     /* inside the tap, as it must be */
+});
 
-/* When the phone's recogniser will not do it, the keyboard's own
-   microphone does the same job in the box. Said plainly, box lit. */
-function useKeyboard(why){
+/* The keyboard's microphone, in the box. Focused inside a tap, the
+   keyboard comes up with it; otherwise the box says to tap it. */
+function useKeyboard(why, inTap){
   $('saidbox').hidden = false;
-  hint((why ? why + ' ' : '') + 'Tap in this box, then the microphone 🎙 on the keyboard, and speak.');
+  $('langs').hidden = true;
+  if(inTap) said.focus();
+  hint((why ? why + ' ' : '') + (inTap ? '' : 'Tap in this box, then ')
+    + 'tap 🎙 on the keyboard and speak — your name, your email or number, and what you do. 🌐 changes the language.');
   said.classList.add('heard');
 }
 function setIdle(){
@@ -499,33 +529,29 @@ function stopVoice(apply){
   if(REC){ try{ REC.stop(); }catch(e){} }
   if(!apply) return;
   if(said.value.trim()) fromVoice(said.value);
-  else if(was) useKeyboard('Nothing came through.');
+  else if(was && HEARD) askLanguage('Nothing came through.');
+  else if(was) useKeyboard('Nothing came through.', true);
 }
 const ERRORS = {
   'not-allowed': 'The microphone is not allowed for this page.',
-  'service-not-allowed': 'Speech recognition is switched off on this phone.',
+  'service-not-allowed': 'Speech recognition is not available here.',
   'audio-capture': 'No microphone could be used.',
   'network': 'Speech recognition needs a connection.',
-  'language-not-supported': 'This language is not available for speech.',
 };
 function startVoice(){
   $('saidbox').hidden = false;
+  $('langs').hidden = true;
   err.classList.remove('show');
   said.classList.remove('heard');
-  if(!SR){
-    /* Inside the tap, so the keyboard opens with it. */
-    said.focus();
-    useKeyboard('');
-    return;
-  }
-  KEPT = said.value.trim(); HEARD = false; RESTARTS = 0;
+  if(!SR || HOMESCREEN){ useKeyboard('', true); return; }
+  KEPT = said.value.trim(); HEARD = false; GOT = false; RESTARTS = 0;
   REC = new SR();
   REC.lang = speechLang();
   REC.continuous = true;
   REC.interimResults = true;
   REC.onaudiostart = () => { HEARD = true; hint('Microphone on — speak now: your name, your email or number, and what you do. Tap the red button when you are done.'); };
   REC.onresult = ev => {
-    HEARD = true;
+    HEARD = GOT = true;
     let text = '';
     for(let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
     said.value = (KEPT ? KEPT + ' ' : '') + text.trim();
@@ -533,13 +559,13 @@ function startVoice(){
   REC.onerror = ev => {
     if(ev.error === 'no-speech' || ev.error === 'aborted') return;   /* onend decides */
     setIdle();
-    useKeyboard(ERRORS[ev.error] || ('Voice stopped (' + ev.error + ').'));
+    if(ev.error === 'language-not-supported') askLanguage('That language is not available.');
+    else useKeyboard(ERRORS[ev.error] || ('Voice stopped (' + ev.error + ').'));
   };
-  /* iOS ends a session after a pause; carry on until the button is
-     pressed again — but only a session that was working, and not for
-     ever: a session that ends at once, again and again, is not one. */
+  /* A pause ends a session on iOS; carry on until the button is pressed
+     again — but only a session that was working, and not for ever. */
   REC.onend = () => {
-    if(!LISTENING){ return; }
+    if(!LISTENING) return;
     if(HEARD && RESTARTS < 30){
       RESTARTS++; KEPT = said.value.trim();
       try{ REC.start(); return; }catch(e){}
@@ -547,20 +573,17 @@ function startVoice(){
     stopVoice(true);
   };
   try{ REC.start(); }
-  catch(e){ useKeyboard('Voice could not start here.'); return; }
+  catch(e){ useKeyboard('', true); return; }
   LISTENING = true;
   $('rec').classList.add('on');
   $('reclbl').innerHTML = 'Tap to<br>stop';
-  hint('Starting the microphone…');
-  /* Nothing from the microphone in six seconds: this phone is not going
-     to do it this way (a home-screen app on some iPhones), so say so
-     rather than pulse at nobody. */
+  hint('Starting the microphone… the phone may ask to allow it.');
   WATCH = setTimeout(() => {
     if(LISTENING && !HEARD){
       setIdle(); try{ REC.abort(); }catch(e){}
       useKeyboard('The microphone did not start.');
     }
-  }, 6000);
+  }, 8000);
   window.scrollTo(0, 0);
 }
 $('rec').addEventListener('click', () => LISTENING ? stopVoice(true) : startVoice());
