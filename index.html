@@ -11,7 +11,7 @@
 <meta name="referrer" content="no-referrer">
 <!-- The page talks to one place, the intake table, and loads nothing else. -->
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://ncannxpmlcanpoqpsfmk.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self' https://ncannxpmlcanpoqpsfmk.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>Let's stay in touch</title>
 <!-- The home-screen icon: iOS wants a PNG and rounds the corners itself
      (icon.svg is its source). A person and a +, on the app's navy. -->
@@ -237,6 +237,29 @@
 /* The publishable key is meant to be public: the table it reaches lets it
    insert one row and do nothing else — no reading, not even its own row
    back (supabase/intake.sql). */
+/* Which copy of the form this is. A home-screen app keeps the last page
+   it loaded (GitHub Pages says ten minutes; iOS can hold it longer), so
+   a fix published an hour ago may not be the form in Guy's hand — that
+   is how the red button went on opening the keyboard after it had been
+   replaced (2026-09-28). On opening and on coming back into view the form
+   asks for its own latest copy, past every cache, and reloads into it if
+   it is newer — but never over typing or a recording. Bump on every
+   publish. */
+const VERSION = '2026-09-28.3';
+async function checkForUpdate(){
+  try{
+    const r = await fetch(location.pathname + '?check=' + Date.now(), {cache: 'no-store'});
+    if(!r.ok) return;
+    const m = /const VERSION = '([^']+)'/.exec(await r.text());
+    if(!m || m[1] === VERSION) return;
+    const busy = LISTENING || AUDIO ||
+      [...document.querySelectorAll('#f input:not([type=date]), #f textarea')].some(x => x.value.trim() && x.id !== 'website');
+    let tried = ''; try{ tried = sessionStorage.getItem('intake.reloadedTo') || ''; }catch(e){}
+    if(busy || tried === m[1]) return;
+    try{ sessionStorage.setItem('intake.reloadedTo', m[1]); }catch(e){}
+    location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]));
+  }catch(e){ /* offline: the copy in hand is the one to use */ }
+}
 const ENDPOINT = 'https://ncannxpmlcanpoqpsfmk.supabase.co/rest/v1/intake';
 const KEY = 'sb_publishable_JQ7KwLaH_djKOh2k28EGYQ_HHbrZtcl';
 const FIELDS = ['name','email','phone','company','job_title','note','voice','follow_up',
@@ -378,7 +401,7 @@ function locate(){
 const freshFix = () => FIX && Date.now() - FIX.at < FIX_FRESH_MS ? FIX : null;
 locate();
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible') locate();
+  if(document.visibilityState === 'visible'){ locate(); checkForUpdate(); }
 });
 
 function fail(msg, focus){
@@ -576,6 +599,7 @@ function finishRecording(){
 $('rec').addEventListener('click', () => LISTENING ? stopRecording() : startRecording());
 $('redo').addEventListener('click', () => { clearRecording(); startRecording(); });
 $('drop').addEventListener('click', clearRecording);
+checkForUpdate();
 </script>
 </body>
 </html>
