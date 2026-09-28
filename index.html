@@ -134,15 +134,15 @@
     box-shadow:0 2px 10px var(--rec-ring); display:flex; align-items:center; justify-content:center}
   .rec .rl{font:600 10px/1.15 var(--font-body); letter-spacing:.02em; text-align:center;
     color:var(--muted-bright)}
-  .rec.on .dot{animation:pulse 1.2s ease-in-out infinite}
+  .rec.on .dot{animation:pulse 2.4s ease-in-out infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--rec-ring)} 50%{box-shadow:0 0 0 14px transparent}}
   @media (prefers-reduced-motion: reduce){ .rec.on .dot{animation:none; box-shadow:0 0 0 6px var(--rec-ring)} }
   .said{border:1px solid var(--rec); border-radius:var(--r); padding:12px; margin:0 0 16px}
   .said .hint{margin:6px 0 0; font-size:13px; color:var(--muted)}
-  .langs{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
-  .langs button{font:500 14px/1 var(--font-body); padding:10px 12px; border-radius:var(--r);
+  .said b{font:600 15px/1.3 var(--font-body)}
+  .recact{display:flex; gap:8px; margin-top:10px}
+  .recact button{font:500 14px/1 var(--font-body); padding:10px 12px; border-radius:var(--r);
     border:1px solid var(--btn-line); background:var(--surface); color:var(--ink); cursor:pointer}
-  input.heard, textarea.heard{border-color:var(--accent); background:var(--accent-fill)}
   [hidden]{display:none !important}
 </style>
 </head>
@@ -153,12 +153,17 @@
   <form id="f" class="card" novalidate autocomplete="on">
     <div class="err" id="err" role="alert"></div>
 
-    <div class="f said" id="saidbox" hidden>
-      <label for="voice">What you said</label>
-      <textarea id="voice" maxlength="2000" placeholder="Say your name, your email or number, and what you do."></textarea>
-      <p class="hint" id="saidhint" aria-live="polite"></p>
-      <div class="langs" id="langs" hidden role="group" aria-label="Which language?"></div>
+    <div class="said" id="recbox" hidden aria-live="polite">
+      <b id="recstate"></b>
+      <p class="hint" id="rechint"></p>
+      <div class="recact" id="recact" hidden>
+        <button type="button" id="redo">Record again</button>
+        <button type="button" id="drop">Remove</button>
+      </div>
     </div>
+    <!-- Typed words for the voice column; the recording is what the red
+         button sends now, and this stays for the table's sake. -->
+    <textarea id="voice" maxlength="2000" hidden></textarea>
 
     <div class="f">
       <label for="name">Name</label>
@@ -235,7 +240,7 @@
 const ENDPOINT = 'https://ncannxpmlcanpoqpsfmk.supabase.co/rest/v1/intake';
 const KEY = 'sb_publishable_JQ7KwLaH_djKOh2k28EGYQ_HHbrZtcl';
 const FIELDS = ['name','email','phone','company','job_title','note','voice','follow_up',
-                'latitude','longitude','accuracy_m'];
+                'latitude','longitude','accuracy_m','audio','audio_type'];
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MAX_AHEAD_DAYS = 1095;      // mirrors the table's check
 const MAX_ACCURACY_M = 100000;    // mirrors the table's check
@@ -311,6 +316,15 @@ phone.addEventListener('input', showSaved);
 const today = () => { const t = new Date(); t.setHours(12,0,0,0); return t; };
 const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
   + '-' + String(d.getDate()).padStart(2,'0');
+/* A loose "next week" or "in a month" lands on the nearest Monday
+   (2026-09-28), the same rule the Mac applies to a spoken one
+   (intake.nearest_monday). A date picked in the calendar is kept. */
+function monday(d){
+  const back = (d.getDay() + 6) % 7;          // Monday is 0
+  const out = new Date(d.getTime() + (back <= 3 ? -back : 7 - back)*864e5);
+  while(out <= today()) out.setDate(out.getDate() + 7);
+  return out;
+}
 const when = $('follow_up');
 when.min = iso(today());
 when.max = iso(new Date(today().getTime() + MAX_AHEAD_DAYS*864e5));
@@ -331,7 +345,7 @@ function showPick(fromCalendar){
 document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
   const on = b.getAttribute('aria-pressed') === 'true';
   document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
-  when.value = on ? '' : iso(new Date(today().getTime() + Number(b.dataset.days)*864e5));
+  when.value = on ? '' : iso(monday(new Date(today().getTime() + Number(b.dataset.days)*864e5)));
   if(!on) b.setAttribute('aria-pressed','true');
   showPick(false);
 }));
@@ -380,6 +394,7 @@ function read(){
     if(s) v[k] = k === 'email' ? s.toLowerCase() : s;
   }
   const p = e164(); if(p) v.phone = p;
+  if(AUDIO){ v.audio = AUDIO.b64; v.audio_type = AUDIO.type; }
   if(when.value) v.follow_up = when.value;
   const fix = freshFix();
   if(fix){
@@ -393,10 +408,11 @@ function read(){
 form.addEventListener('submit', async ev => {
   ev.preventDefault();
   err.classList.remove('show');
-  if(said.value.trim()) fromVoice(said.value);
+  if(LISTENING) await stopRecording();
   const v = read();
-  if(!v.name) return fail('Please fill in your name.', 'name');
-  if(!v.email && !v.phone) return fail('Please leave an email or a phone number.', 'email');
+  /* With a recording, the name and address are read out of it. */
+  if(!v.audio && !v.name) return fail('Please fill in your name — or press the red button and say it.', 'name');
+  if(!v.audio && !v.email && !v.phone) return fail('Please leave an email or a phone number.', 'email');
   if(v.email && !EMAIL.test(v.email)) return fail('That email address does not look right.', 'email');
   if(v.phone && !/^\+\d{7,15}$/.test(v.phone))
     return fail('That phone number does not look complete — check the country and the number.', 'phone');
@@ -431,16 +447,14 @@ form.addEventListener('submit', async ev => {
 });
 
 function showDone(v){
-  const first = String(v.name).split(/\s+/)[0];
-  $('thanks').textContent = 'Thanks, ' + first + " — you're added.";
+  const first = String(v.name || '').split(/\s+/)[0];
+  $('thanks').textContent = first ? 'Thanks, ' + first + " — you're added." : "Thanks — you're added.";
   $('donewhen').textContent = v.follow_up
     ? 'Catch-up noted for ' + new Date(v.follow_up + 'T12:00').toLocaleDateString('en-GB',
         {weekday:'long', day:'numeric', month:'long', year:'numeric'}) + '.'
     : '';
   form.reset();
-  stopVoice(false);
-  $('saidbox').hidden = true; $('saidhint').textContent = '';
-  document.querySelectorAll('input.heard').forEach(x => x.classList.remove('heard'));
+  clearRecording();
   $('rec').hidden = true;
   document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
   showPick(false);
@@ -457,197 +471,111 @@ $('again').addEventListener('click', () => {
   $('name').focus();
 });
 
-/* ---- Record by voice (asked for 2026-09-28) ----------------------------
-   The phone's own speech-to-text, in the browser: nothing is recorded or
-   sent anywhere while speaking except by the phone itself. What was said
-   lands in "What you said", where it can be corrected, and the name,
-   email and phone are picked out of it into their boxes — only boxes
-   still empty, and lit so the person checks them. The words go with the
-   entry, and the Mac fills in the rest (company, what they do, a catch-up
-   date) when it collects it. Where the browser cannot listen, the button
-   opens the box and the keyboard's own microphone does the same job. */
-/* Two ways to listen, and which one depends on how the page was opened.
-   Opened from the home-screen icon — how Guy always opens it — iOS does
-   not give a web app the speech recogniser at all (only Safari has it),
-   so there the button opens "What you said" with the keyboard up and the
-   keyboard's own microphone does the listening: 🎙 to speak, 🌐 for
-   another language. In Safari the recogniser is used, and if it fails the
-   form asks which language and tries again. */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const HOMESCREEN = navigator.standalone === true
-  || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
-let REC = null, LISTENING = false, KEPT = '', HEARD = false, GOT = false, RESTARTS = 0, WATCH = 0;
-const said = $('voice');
-const hint = msg => { $('saidhint').textContent = msg; };
+/* One press records, one press stops (asked for 2026-09-28, "open the
+   app from the home screen AND use the red button as planned"). A web
+   app opened from the home screen gets no speech recogniser from iOS, but
+   it can record: the phone asks once for the microphone, the audio goes
+   with the entry, and Guy's Mac turns it into words when it collects it —
+   locally, with whisper.cpp — and reads the name, address and the rest
+   out of them. So nothing needs typing: say it, press Add. Two minutes at
+   most, at a speech bitrate, which keeps an entry well under the table's
+   cap. */
+const MAX_SECS = 120;
+let AUDIO = null, LISTENING = false, MR = null, STREAM = null, CHUNKS = [], T0 = 0, TICK = 0, DONE = null;
 
-const LANGS = [['en-GB','English'],['nl-NL','Nederlands'],['pt-PT','Português'],
-  ['de-DE','Deutsch'],['fr-FR','Français'],['es-ES','Español'],['it-IT','Italiano']];
-/* A locale the recogniser knows: the phone's own can be a mix it does not
-   ("en-NL"), so the language is kept and the region made one that exists.
-   A language picked after a failure wins, for the rest of the session. */
-let PICKED = '';
-function speechLang(){
-  if(PICKED) return PICKED;
-  const l = String(navigator.language || 'en').split('-')[0].toLowerCase();
-  const hit = LANGS.find(([code]) => code.startsWith(l + '-'));
-  return hit ? hit[0] : 'en-GB';
+function recUI(state, hint, actions){
+  $('recbox').hidden = !state;
+  $('recstate').textContent = state || '';
+  $('rechint').textContent = hint || '';
+  $('recact').hidden = !actions;
 }
-function askLanguage(why){
-  hint(why + ' Which language will you speak?');
-  const box = $('langs');
-  box.innerHTML = LANGS.map(([code, name]) =>
-    `<button type="button" data-lang="${code}">${name}</button>`).join('');
-  box.hidden = false;
+const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+function recMime(){
+  for(const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'])
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+  return '';
 }
-$('langs').addEventListener('click', ev => {
-  const b = ev.target.closest('button[data-lang]');
-  if(!b) return;
-  PICKED = b.dataset.lang;
-  $('langs').hidden = true;
-  startVoice();                     /* inside the tap, as it must be */
-});
+function clearRecording(){
+  AUDIO = null;
+  recUI('');
+}
 
-/* The keyboard's microphone, in the box. Focused inside a tap, the
-   keyboard comes up with it; otherwise the box says to tap it. */
-function useKeyboard(why, inTap){
-  $('saidbox').hidden = false;
-  $('langs').hidden = true;
-  if(inTap) said.focus();
-  hint((why ? why + ' ' : '') + (inTap ? '' : 'Tap in this box, then ')
-    + 'tap 🎙 on the keyboard and speak — your name, your email or number, and what you do. 🌐 changes the language.');
-  said.classList.add('heard');
-}
-function setIdle(){
-  LISTENING = false;
-  clearTimeout(WATCH);
-  $('rec').classList.remove('on');
-  $('reclbl').innerHTML = 'Record<br>by voice';
-}
-function stopVoice(apply){
-  const was = LISTENING;
-  setIdle();
-  if(REC){ try{ REC.stop(); }catch(e){} }
-  if(!apply) return;
-  if(said.value.trim()) fromVoice(said.value);
-  else if(was && HEARD) askLanguage('Nothing came through.');
-  else if(was) useKeyboard('Nothing came through.', true);
-}
-const ERRORS = {
-  'not-allowed': 'The microphone is not allowed for this page.',
-  'service-not-allowed': 'Speech recognition is not available here.',
-  'audio-capture': 'No microphone could be used.',
-  'network': 'Speech recognition needs a connection.',
-};
-function startVoice(){
-  $('saidbox').hidden = false;
-  $('langs').hidden = true;
+async function startRecording(){
   err.classList.remove('show');
-  said.classList.remove('heard');
-  if(!SR || HOMESCREEN){ useKeyboard('', true); return; }
-  KEPT = said.value.trim(); HEARD = false; GOT = false; RESTARTS = 0;
-  REC = new SR();
-  REC.lang = speechLang();
-  REC.continuous = true;
-  REC.interimResults = true;
-  REC.onaudiostart = () => { HEARD = true; hint('Microphone on — speak now: your name, your email or number, and what you do. Tap the red button when you are done.'); };
-  REC.onresult = ev => {
-    HEARD = GOT = true;
-    let text = '';
-    for(let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
-    said.value = (KEPT ? KEPT + ' ' : '') + text.trim();
-  };
-  REC.onerror = ev => {
-    if(ev.error === 'no-speech' || ev.error === 'aborted') return;   /* onend decides */
-    setIdle();
-    if(ev.error === 'language-not-supported') askLanguage('That language is not available.');
-    else useKeyboard(ERRORS[ev.error] || ('Voice stopped (' + ev.error + ').'));
-  };
-  /* A pause ends a session on iOS; carry on until the button is pressed
-     again — but only a session that was working, and not for ever. */
-  REC.onend = () => {
-    if(!LISTENING) return;
-    if(HEARD && RESTARTS < 30){
-      RESTARTS++; KEPT = said.value.trim();
-      try{ REC.start(); return; }catch(e){}
-    }
-    stopVoice(true);
-  };
-  try{ REC.start(); }
-  catch(e){ useKeyboard('', true); return; }
-  LISTENING = true;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){
+    recUI('This phone cannot record here.', 'Type your details in the boxes instead.');
+    return;
+  }
+  try{
+    STREAM = await navigator.mediaDevices.getUserMedia({audio: true});
+  }catch(e){
+    recUI('The microphone is not allowed.',
+      e && e.name === 'NotAllowedError'
+        ? 'Allow the microphone when the phone asks, or type your details in the boxes.'
+        : 'It could not be used just now (' + (e && e.name || 'error') + '). Type your details in the boxes.');
+    return;
+  }
+  const type = recMime();
+  try{
+    MR = new MediaRecorder(STREAM, Object.assign({audioBitsPerSecond: 32000}, type ? {mimeType: type} : {}));
+  }catch(e){
+    MR = new MediaRecorder(STREAM);
+  }
+  CHUNKS = [];
+  MR.ondataavailable = ev => { if(ev.data && ev.data.size) CHUNKS.push(ev.data); };
+  MR.onstop = finishRecording;
+  MR.start(1000);
+  LISTENING = true; T0 = Date.now();
   $('rec').classList.add('on');
   $('reclbl').innerHTML = 'Tap to<br>stop';
-  hint('Starting the microphone… the phone may ask to allow it.');
-  WATCH = setTimeout(() => {
-    if(LISTENING && !HEARD){
-      setIdle(); try{ REC.abort(); }catch(e){}
-      useKeyboard('The microphone did not start.');
-    }
-  }, 8000);
+  recUI('Recording… 0:00', 'Say your name, your email or number, and what you do. Tap the red button when you are done.');
+  TICK = setInterval(() => {
+    const secs = (Date.now() - T0) / 1000;
+    $('recstate').textContent = 'Recording… ' + clock(secs);
+    if(secs >= MAX_SECS) stopRecording();
+  }, 250);
   window.scrollTo(0, 0);
 }
-$('rec').addEventListener('click', () => LISTENING ? stopVoice(true) : startVoice());
-said.addEventListener('change', () => fromVoice(said.value));
-said.addEventListener('input', () => said.classList.remove('heard'));
 
-/* Speech-to-text writes "ana at gmail dot com"; put it back together. */
-function spokenEmail(text){
-  const t = ' ' + text.toLowerCase()
-    .replace(/\s+(at|apenstaartje|arroba)\s+/g, '@')
-    .replace(/\s+(dot|punt|ponto|punto)\s+/g, '.')
-    .replace(/\s+(underscore)\s+/g, '_')
-    .replace(/\s+(dash|hyphen|streepje)\s+/g, '-') + ' ';
-  const m = t.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/);
-  return m ? m[0].replace(/\.$/, '') : '';
+function stopRecording(){
+  if(!LISTENING) return Promise.resolve();
+  LISTENING = false;
+  clearInterval(TICK);
+  $('rec').classList.remove('on');
+  $('reclbl').innerHTML = 'Record<br>by voice';
+  return new Promise(resolve => { DONE = resolve; try{ MR.stop(); }catch(e){ resolve(); } });
 }
-function spokenPhone(text){
-  const m = text.replace(/\b(plus)\s*/gi, '+').match(/\+?\d[\d\s().-]{6,}\d/);
-  return m ? m[0].replace(/[^\d+]/g, '') : '';
-}
-/* A cue ("my name is", "ik ben", …) found whatever its case, then the
-   name read case-sensitively: speech-to-text capitalises names, and that
-   is what stops "Ana Silva and my email" running on. Particles (van, de,
-   da…) are kept only between two capitalised words. A lone lowercase
-   first name after a cue is taken as one word. */
-const NAME_CUES = /(?:^|[\s,.;])(?:my name is|my name's|i am|i'm|this is|call me|mijn naam is|ik ben|ik heet|ich bin|ich heisse|ich heiße|je m'appelle|je suis|me llamo|soy|chamo-me|meu nome é|sou o|sou a)\s+/iu;
-const PARTICLE = /^(van|de|der|den|da|do|dos|du|la|le|von|ter|te)$/;
-function spokenName(text){
-  const m = NAME_CUES.exec(text);
-  if(!m) return '';
-  const words = text.slice(m.index + m[0].length).split(/[\s]+/);
-  const out = [];
-  for(const raw of words){
-    const w = raw.replace(/[,.;:!?]+$/, '');
-    const stop = w !== raw;               /* punctuation ends the name */
-    if(/^\p{Lu}[\p{L}'’-]*$/u.test(w)) out.push(w);
-    else if(out.length && PARTICLE.test(w)) out.push(w);
-    else if(!out.length && /^\p{Ll}[\p{L}'’-]+$/u.test(w)){
-      out.push(w[0].toUpperCase() + w.slice(1)); break;
-    }
-    else break;
-    if(stop || out.length >= 5) break;
+
+function finishRecording(){
+  const secs = (Date.now() - T0) / 1000;
+  if(STREAM) STREAM.getTracks().forEach(t => t.stop());
+  STREAM = null;
+  const type = (MR && MR.mimeType) || recMime() || 'audio/mp4';
+  const blob = new Blob(CHUNKS, {type});
+  const done = () => { const d = DONE; DONE = null; if(d) d(); };
+  if(secs < 1.5 || blob.size < 2000){
+    recUI('That was too short.', 'Press the red button and say it again.');
+    return done();
   }
-  while(out.length && PARTICLE.test(out[out.length-1])) out.pop();
-  return out.join(' ');
-}
-function fromVoice(text){
-  text = String(text || '').trim();
-  if(!text) return;
-  const put = (id, value) => {
-    if(!value || $(id).value.trim()) return false;
-    $(id).value = value; $(id).classList.add('heard');
-    $(id).addEventListener('input', () => $(id).classList.remove('heard'), {once:true});
-    return true;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const b64 = String(reader.result).split(',')[1] || '';
+    if(b64.length > 1000000){
+      recUI('That was too long to send.', 'Press the red button and keep it under two minutes.');
+      return done();
+    }
+    AUDIO = {b64, type: type.toLowerCase().replace(/\s+/g, ''), secs};
+    recUI('🎙 Recorded ' + clock(secs) + ' ✓',
+      'Press Add. Your name and details are read from what you said — anything you type in the boxes counts too.', true);
+    done();
   };
-  const got = [];
-  if(put('name', spokenName(text))) got.push('name');
-  if(put('email', spokenEmail(text))) got.push('email');
-  const tel = spokenPhone(text);
-  if(tel && put('phone', tel)){ got.push('number'); showSaved(); }
-  $('saidhint').textContent = got.length
-    ? 'Filled in your ' + got.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' below — check them. The rest is read from what you said.'
-    : 'Check the boxes below: at least your name and an email or number.';
+  reader.onerror = () => { recUI('The recording could not be kept.', 'Press the red button and try again.'); done(); };
+  reader.readAsDataURL(blob);
 }
+
+$('rec').addEventListener('click', () => LISTENING ? stopRecording() : startRecording());
+$('redo').addEventListener('click', () => { clearRecording(); startRecording(); });
+$('drop').addEventListener('click', clearRecording);
 </script>
 </body>
 </html>
