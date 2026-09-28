@@ -132,16 +132,14 @@
     -webkit-tap-highlight-color:transparent}
   .rec .dot{width:60px; height:60px; border-radius:50%; background:var(--rec);
     box-shadow:0 2px 10px var(--rec-ring); display:flex; align-items:center; justify-content:center}
-  .rec .dot::after{content:''; width:16px; height:16px; border-radius:50%; background:var(--on-rec)}
   .rec .rl{font:600 10px/1.15 var(--font-body); letter-spacing:.02em; text-align:center;
     color:var(--muted-bright)}
   .rec.on .dot{animation:pulse 1.2s ease-in-out infinite}
-  .rec.on .dot::after{border-radius:3px}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--rec-ring)} 50%{box-shadow:0 0 0 14px transparent}}
   @media (prefers-reduced-motion: reduce){ .rec.on .dot{animation:none; box-shadow:0 0 0 6px var(--rec-ring)} }
   .said{border:1px solid var(--rec); border-radius:var(--r); padding:12px; margin:0 0 16px}
   .said .hint{margin:6px 0 0; font-size:13px; color:var(--muted)}
-  input.heard{border-color:var(--accent); background:var(--accent-fill)}
+  input.heard, textarea.heard{border-color:var(--accent); background:var(--accent-fill)}
   [hidden]{display:none !important}
 </style>
 </head>
@@ -464,56 +462,110 @@ $('again').addEventListener('click', () => {
    date) when it collects it. Where the browser cannot listen, the button
    opens the box and the keyboard's own microphone does the same job. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let REC = null, LISTENING = false, KEPT = '';
+let REC = null, LISTENING = false, KEPT = '', HEARD = false, RESTARTS = 0, WATCH = 0;
 const said = $('voice');
+const hint = msg => { $('saidhint').textContent = msg; };
 
-function stopVoice(apply){
+/* A locale the phone's recogniser knows. The phone's own setting can be
+   a mix it does not ("en-NL": English, set in the Netherlands), and then
+   it fails without a word — so the language is kept and the region
+   replaced by one that exists. */
+const KNOWN = {en:['US','GB','AU','CA','IN','IE','NZ','ZA'], nl:['NL','BE'],
+  pt:['PT','BR'], de:['DE','AT','CH'], fr:['FR','BE','CA','CH'], es:['ES','MX','US'], it:['IT']};
+const HOME = {en:'GB', nl:'NL', pt:'PT', de:'DE', fr:'FR', es:'ES', it:'IT'};
+function speechLang(){
+  const [l, r] = String(navigator.language || 'en-GB').split('-');
+  const lang = (l || 'en').toLowerCase(), reg = (r || '').toUpperCase();
+  if(!KNOWN[lang]) return 'en-GB';
+  return lang + '-' + (KNOWN[lang].includes(reg) ? reg : HOME[lang]);
+}
+
+/* When the phone's recogniser will not do it, the keyboard's own
+   microphone does the same job in the box. Said plainly, box lit. */
+function useKeyboard(why){
+  $('saidbox').hidden = false;
+  hint((why ? why + ' ' : '') + 'Tap in this box, then the microphone 🎙 on the keyboard, and speak.');
+  said.classList.add('heard');
+}
+function setIdle(){
   LISTENING = false;
+  clearTimeout(WATCH);
   $('rec').classList.remove('on');
   $('reclbl').innerHTML = 'Record<br>by voice';
-  if(REC){ try{ REC.stop(); }catch(e){} }
-  if(apply) fromVoice(said.value);
 }
+function stopVoice(apply){
+  const was = LISTENING;
+  setIdle();
+  if(REC){ try{ REC.stop(); }catch(e){} }
+  if(!apply) return;
+  if(said.value.trim()) fromVoice(said.value);
+  else if(was) useKeyboard('Nothing came through.');
+}
+const ERRORS = {
+  'not-allowed': 'The microphone is not allowed for this page.',
+  'service-not-allowed': 'Speech recognition is switched off on this phone.',
+  'audio-capture': 'No microphone could be used.',
+  'network': 'Speech recognition needs a connection.',
+  'language-not-supported': 'This language is not available for speech.',
+};
 function startVoice(){
   $('saidbox').hidden = false;
   err.classList.remove('show');
+  said.classList.remove('heard');
   if(!SR){
-    $('saidhint').textContent = 'Tap the microphone on the keyboard and speak — your name, email or number, and what you do.';
+    /* Inside the tap, so the keyboard opens with it. */
     said.focus();
+    useKeyboard('');
     return;
   }
-  KEPT = said.value.trim();
+  KEPT = said.value.trim(); HEARD = false; RESTARTS = 0;
   REC = new SR();
-  REC.lang = navigator.language || 'en-GB';
+  REC.lang = speechLang();
   REC.continuous = true;
   REC.interimResults = true;
+  REC.onaudiostart = () => { HEARD = true; hint('Microphone on — speak now: your name, your email or number, and what you do. Tap the red button when you are done.'); };
   REC.onresult = ev => {
+    HEARD = true;
     let text = '';
     for(let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
     said.value = (KEPT ? KEPT + ' ' : '') + text.trim();
   };
   REC.onerror = ev => {
-    if(ev.error === 'not-allowed' || ev.error === 'service-not-allowed'){
-      LISTENING = false;
-      $('saidhint').textContent = 'The microphone is not allowed here. Tap the microphone on the keyboard instead, or type.';
-      said.focus();
-    }
+    if(ev.error === 'no-speech' || ev.error === 'aborted') return;   /* onend decides */
+    setIdle();
+    useKeyboard(ERRORS[ev.error] || ('Voice stopped (' + ev.error + ').'));
   };
-  /* iOS stops listening after a pause; carry on until the button is
-     pressed again. */
+  /* iOS ends a session after a pause; carry on until the button is
+     pressed again — but only a session that was working, and not for
+     ever: a session that ends at once, again and again, is not one. */
   REC.onend = () => {
-    if(LISTENING){ KEPT = said.value.trim(); try{ REC.start(); }catch(e){ stopVoice(true); } }
-    else fromVoice(said.value);
+    if(!LISTENING){ return; }
+    if(HEARD && RESTARTS < 30){
+      RESTARTS++; KEPT = said.value.trim();
+      try{ REC.start(); return; }catch(e){}
+    }
+    stopVoice(true);
   };
-  try{ REC.start(); }catch(e){ return; }
+  try{ REC.start(); }
+  catch(e){ useKeyboard('Voice could not start here.'); return; }
   LISTENING = true;
   $('rec').classList.add('on');
   $('reclbl').innerHTML = 'Tap to<br>stop';
-  $('saidhint').textContent = 'Listening… say your name, your email or number, and what you do. Tap the red button when you are done.';
+  hint('Starting the microphone…');
+  /* Nothing from the microphone in six seconds: this phone is not going
+     to do it this way (a home-screen app on some iPhones), so say so
+     rather than pulse at nobody. */
+  WATCH = setTimeout(() => {
+    if(LISTENING && !HEARD){
+      setIdle(); try{ REC.abort(); }catch(e){}
+      useKeyboard('The microphone did not start.');
+    }
+  }, 6000);
   window.scrollTo(0, 0);
 }
 $('rec').addEventListener('click', () => LISTENING ? stopVoice(true) : startVoice());
 said.addEventListener('change', () => fromVoice(said.value));
+said.addEventListener('input', () => said.classList.remove('heard'));
 
 /* Speech-to-text writes "ana at gmail dot com"; put it back together. */
 function spokenEmail(text){
