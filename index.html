@@ -31,6 +31,7 @@
     --primary:#0f172a; --primary-hover:#1e293b; --on-primary:#ffffff;
     --accent:#2563eb; --accent-fill:rgba(37,99,235,.10); --focus-ring:rgba(37,99,235,.18);
     --error:#ba1a1a; --error-fill:rgba(186,26,26,.09);
+    --rec:#dc2626; --rec-ring:rgba(220,38,38,.35); --on-rec:#ffffff;
     --r:4px;
     --font-display:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     --font-body:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -45,6 +46,7 @@
       --primary:#ffffff; --primary-hover:#e2e2e2; --on-primary:#0d1420;
       --accent:#5b8dff; --accent-fill:rgba(91,141,255,.16); --focus-ring:rgba(91,141,255,.28);
       --error:#ffb4ab; --error-fill:rgba(255,180,171,.12);
+      --rec:#ef4444; --rec-ring:rgba(239,68,68,.4); --on-rec:#ffffff;
     }
   }
   *{box-sizing:border-box}
@@ -119,6 +121,27 @@
   .done h2{font:700 22px/1.2 var(--font-display); letter-spacing:-0.03em; margin:0 0 8px}
   .done p{color:var(--muted); margin:0}
   .done .when{margin-top:8px; font:400 13px/1.4 var(--font-mono); color:var(--muted-bright)}
+  /* Record by voice (asked for 2026-09-28): a red circle in the corner,
+     two tiny rows of words under it. Room is left under the form so it
+     never sits on top of Add. */
+  body{padding-bottom:max(120px, calc(env(safe-area-inset-bottom) + 110px))}
+  .rec{position:fixed; right:max(16px, env(safe-area-inset-right));
+    bottom:max(18px, env(safe-area-inset-bottom)); z-index:5;
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    background:none; border:0; padding:0; cursor:pointer; color:var(--ink);
+    -webkit-tap-highlight-color:transparent}
+  .rec .dot{width:60px; height:60px; border-radius:50%; background:var(--rec);
+    box-shadow:0 2px 10px var(--rec-ring); display:flex; align-items:center; justify-content:center}
+  .rec .dot::after{content:''; width:16px; height:16px; border-radius:50%; background:var(--on-rec)}
+  .rec .rl{font:600 10px/1.15 var(--font-body); letter-spacing:.02em; text-align:center;
+    color:var(--muted-bright)}
+  .rec.on .dot{animation:pulse 1.2s ease-in-out infinite}
+  .rec.on .dot::after{border-radius:3px}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--rec-ring)} 50%{box-shadow:0 0 0 14px transparent}}
+  @media (prefers-reduced-motion: reduce){ .rec.on .dot{animation:none; box-shadow:0 0 0 6px var(--rec-ring)} }
+  .said{border:1px solid var(--rec); border-radius:var(--r); padding:12px; margin:0 0 16px}
+  .said .hint{margin:6px 0 0; font-size:13px; color:var(--muted)}
+  input.heard{border-color:var(--accent); background:var(--accent-fill)}
   [hidden]{display:none !important}
 </style>
 </head>
@@ -128,6 +151,12 @@
 
   <form id="f" class="card" novalidate autocomplete="on">
     <div class="err" id="err" role="alert"></div>
+
+    <div class="f said" id="saidbox" hidden>
+      <label for="voice">What you said</label>
+      <textarea id="voice" maxlength="2000" placeholder="Say your name, your email or number, and what you do."></textarea>
+      <p class="hint" id="saidhint" aria-live="polite"></p>
+    </div>
 
     <div class="f">
       <label for="name">Name</label>
@@ -192,13 +221,18 @@
   </section>
 </main>
 
+<button type="button" class="rec" id="rec" aria-label="Record by voice">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="rl" id="reclbl">Record<br>by voice</span>
+</button>
+
 <script>
 /* The publishable key is meant to be public: the table it reaches lets it
    insert one row and do nothing else — no reading, not even its own row
    back (supabase/intake.sql). */
 const ENDPOINT = 'https://ncannxpmlcanpoqpsfmk.supabase.co/rest/v1/intake';
 const KEY = 'sb_publishable_JQ7KwLaH_djKOh2k28EGYQ_HHbrZtcl';
-const FIELDS = ['name','email','phone','company','job_title','note','follow_up',
+const FIELDS = ['name','email','phone','company','job_title','note','voice','follow_up',
                 'latitude','longitude','accuracy_m'];
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MAX_AHEAD_DAYS = 1095;      // mirrors the table's check
@@ -339,7 +373,7 @@ function fail(msg, focus){
 
 function read(){
   const v = {};
-  for(const k of ['name','email','company','job_title','note']){
+  for(const k of ['name','email','company','job_title','note','voice']){
     const s = $(k).value.trim();
     if(s) v[k] = k === 'email' ? s.toLowerCase() : s;
   }
@@ -401,6 +435,10 @@ function showDone(v){
         {weekday:'long', day:'numeric', month:'long', year:'numeric'}) + '.'
     : '';
   form.reset();
+  stopVoice(false);
+  $('saidbox').hidden = true; $('saidhint').textContent = '';
+  document.querySelectorAll('input.heard').forEach(x => x.classList.remove('heard'));
+  $('rec').hidden = true;
   document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
   showPick(false);
   cc.value = COUNTRIES[0][0]; shortLabel(); showSaved();
@@ -410,10 +448,131 @@ function showDone(v){
 
 $('again').addEventListener('click', () => {
   $('done').hidden = true; form.hidden = false;
+  $('rec').hidden = false;
   locate();
   err.classList.remove('show');
   $('name').focus();
 });
+
+/* ---- Record by voice (asked for 2026-09-28) ----------------------------
+   The phone's own speech-to-text, in the browser: nothing is recorded or
+   sent anywhere while speaking except by the phone itself. What was said
+   lands in "What you said", where it can be corrected, and the name,
+   email and phone are picked out of it into their boxes — only boxes
+   still empty, and lit so the person checks them. The words go with the
+   entry, and the Mac fills in the rest (company, what they do, a catch-up
+   date) when it collects it. Where the browser cannot listen, the button
+   opens the box and the keyboard's own microphone does the same job. */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let REC = null, LISTENING = false, KEPT = '';
+const said = $('voice');
+
+function stopVoice(apply){
+  LISTENING = false;
+  $('rec').classList.remove('on');
+  $('reclbl').innerHTML = 'Record<br>by voice';
+  if(REC){ try{ REC.stop(); }catch(e){} }
+  if(apply) fromVoice(said.value);
+}
+function startVoice(){
+  $('saidbox').hidden = false;
+  err.classList.remove('show');
+  if(!SR){
+    $('saidhint').textContent = 'Tap the microphone on the keyboard and speak — your name, email or number, and what you do.';
+    said.focus();
+    return;
+  }
+  KEPT = said.value.trim();
+  REC = new SR();
+  REC.lang = navigator.language || 'en-GB';
+  REC.continuous = true;
+  REC.interimResults = true;
+  REC.onresult = ev => {
+    let text = '';
+    for(let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
+    said.value = (KEPT ? KEPT + ' ' : '') + text.trim();
+  };
+  REC.onerror = ev => {
+    if(ev.error === 'not-allowed' || ev.error === 'service-not-allowed'){
+      LISTENING = false;
+      $('saidhint').textContent = 'The microphone is not allowed here. Tap the microphone on the keyboard instead, or type.';
+      said.focus();
+    }
+  };
+  /* iOS stops listening after a pause; carry on until the button is
+     pressed again. */
+  REC.onend = () => {
+    if(LISTENING){ KEPT = said.value.trim(); try{ REC.start(); }catch(e){ stopVoice(true); } }
+    else fromVoice(said.value);
+  };
+  try{ REC.start(); }catch(e){ return; }
+  LISTENING = true;
+  $('rec').classList.add('on');
+  $('reclbl').innerHTML = 'Tap to<br>stop';
+  $('saidhint').textContent = 'Listening… say your name, your email or number, and what you do. Tap the red button when you are done.';
+  window.scrollTo(0, 0);
+}
+$('rec').addEventListener('click', () => LISTENING ? stopVoice(true) : startVoice());
+said.addEventListener('change', () => fromVoice(said.value));
+
+/* Speech-to-text writes "ana at gmail dot com"; put it back together. */
+function spokenEmail(text){
+  const t = ' ' + text.toLowerCase()
+    .replace(/\s+(at|apenstaartje|arroba)\s+/g, '@')
+    .replace(/\s+(dot|punt|ponto|punto)\s+/g, '.')
+    .replace(/\s+(underscore)\s+/g, '_')
+    .replace(/\s+(dash|hyphen|streepje)\s+/g, '-') + ' ';
+  const m = t.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/);
+  return m ? m[0].replace(/\.$/, '') : '';
+}
+function spokenPhone(text){
+  const m = text.replace(/\b(plus)\s*/gi, '+').match(/\+?\d[\d\s().-]{6,}\d/);
+  return m ? m[0].replace(/[^\d+]/g, '') : '';
+}
+/* A cue ("my name is", "ik ben", …) found whatever its case, then the
+   name read case-sensitively: speech-to-text capitalises names, and that
+   is what stops "Ana Silva and my email" running on. Particles (van, de,
+   da…) are kept only between two capitalised words. A lone lowercase
+   first name after a cue is taken as one word. */
+const NAME_CUES = /(?:^|[\s,.;])(?:my name is|my name's|i am|i'm|this is|call me|mijn naam is|ik ben|ik heet|ich bin|ich heisse|ich heiße|je m'appelle|je suis|me llamo|soy|chamo-me|meu nome é|sou o|sou a)\s+/iu;
+const PARTICLE = /^(van|de|der|den|da|do|dos|du|la|le|von|ter|te)$/;
+function spokenName(text){
+  const m = NAME_CUES.exec(text);
+  if(!m) return '';
+  const words = text.slice(m.index + m[0].length).split(/[\s]+/);
+  const out = [];
+  for(const raw of words){
+    const w = raw.replace(/[,.;:!?]+$/, '');
+    const stop = w !== raw;               /* punctuation ends the name */
+    if(/^\p{Lu}[\p{L}'’-]*$/u.test(w)) out.push(w);
+    else if(out.length && PARTICLE.test(w)) out.push(w);
+    else if(!out.length && /^\p{Ll}[\p{L}'’-]+$/u.test(w)){
+      out.push(w[0].toUpperCase() + w.slice(1)); break;
+    }
+    else break;
+    if(stop || out.length >= 5) break;
+  }
+  while(out.length && PARTICLE.test(out[out.length-1])) out.pop();
+  return out.join(' ');
+}
+function fromVoice(text){
+  text = String(text || '').trim();
+  if(!text) return;
+  const put = (id, value) => {
+    if(!value || $(id).value.trim()) return false;
+    $(id).value = value; $(id).classList.add('heard');
+    $(id).addEventListener('input', () => $(id).classList.remove('heard'), {once:true});
+    return true;
+  };
+  const got = [];
+  if(put('name', spokenName(text))) got.push('name');
+  if(put('email', spokenEmail(text))) got.push('email');
+  const tel = spokenPhone(text);
+  if(tel && put('phone', tel)){ got.push('number'); showSaved(); }
+  $('saidhint').textContent = got.length
+    ? 'Filled in your ' + got.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' below — check them. The rest is read from what you said.'
+    : 'Check the boxes below: at least your name and an email or number.';
+}
 </script>
 </body>
 </html>
