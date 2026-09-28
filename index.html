@@ -31,7 +31,6 @@
     --primary:#0f172a; --primary-hover:#1e293b; --on-primary:#ffffff;
     --accent:#2563eb; --accent-fill:rgba(37,99,235,.10); --focus-ring:rgba(37,99,235,.18);
     --error:#ba1a1a; --error-fill:rgba(186,26,26,.09);
-    --rec:#dc2626; --rec-ring:rgba(220,38,38,.35); --on-rec:#ffffff;
     --r:4px;
     --font-display:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     --font-body:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -46,7 +45,6 @@
       --primary:#ffffff; --primary-hover:#e2e2e2; --on-primary:#0d1420;
       --accent:#5b8dff; --accent-fill:rgba(91,141,255,.16); --focus-ring:rgba(91,141,255,.28);
       --error:#ffb4ab; --error-fill:rgba(255,180,171,.12);
-      --rec:#ef4444; --rec-ring:rgba(239,68,68,.4); --on-rec:#ffffff;
     }
   }
   *{box-sizing:border-box}
@@ -121,32 +119,6 @@
   .done h2{font:700 22px/1.2 var(--font-display); letter-spacing:-0.03em; margin:0 0 8px}
   .done p{color:var(--muted); margin:0}
   .done .when{margin-top:8px; font:400 13px/1.4 var(--font-mono); color:var(--muted-bright)}
-  /* Record by voice (asked for 2026-09-28): a red circle in the corner,
-     two tiny rows of words under it. Room is left under the form so it
-     never sits on top of Add. */
-  body{padding-bottom:max(120px, calc(env(safe-area-inset-bottom) + 110px))}
-  .rec{position:fixed; right:max(16px, env(safe-area-inset-right));
-    bottom:max(18px, env(safe-area-inset-bottom)); z-index:5;
-    display:flex; flex-direction:column; align-items:center; gap:5px;
-    background:none; border:0; padding:0; cursor:pointer; color:var(--ink);
-    -webkit-tap-highlight-color:transparent}
-  .rec .dot{width:60px; height:60px; border-radius:50%; background:var(--rec);
-    box-shadow:0 2px 10px var(--rec-ring); display:flex; align-items:center; justify-content:center}
-  .rec .rl{font:600 10px/1.15 var(--font-body); letter-spacing:.02em; text-align:center;
-    color:var(--muted-bright)}
-  .rec.on .dot{animation:pulse 2.4s ease-in-out infinite}
-  /* While recording, a white square: press again to stop. */
-  .rec.on .dot::after{content:''; width:18px; height:18px; border-radius:3px; background:var(--on-rec)}
-  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--rec-ring)} 50%{box-shadow:0 0 0 14px transparent}}
-  @media (prefers-reduced-motion: reduce){ .rec.on .dot{animation:none; box-shadow:0 0 0 6px var(--rec-ring)} }
-  .said{border:1px solid var(--rec); border-radius:var(--r); padding:12px; margin:0 0 16px}
-  .said .hint{margin:6px 0 0; font-size:13px; color:var(--muted)}
-  .said b{font:600 15px/1.3 var(--font-body)}
-  .meter{height:6px; border-radius:3px; background:var(--surface-highest); margin-top:10px; overflow:hidden}
-  .meter i{display:block; height:100%; width:0; background:var(--rec); transition:width .2s linear}
-  .recact{display:flex; gap:8px; margin-top:10px}
-  .recact button{font:500 14px/1 var(--font-body); padding:10px 12px; border-radius:var(--r);
-    border:1px solid var(--btn-line); background:var(--surface); color:var(--ink); cursor:pointer}
   [hidden]{display:none !important}
 </style>
 </head>
@@ -157,18 +129,6 @@
   <form id="f" class="card" novalidate autocomplete="on">
     <div class="err" id="err" role="alert"></div>
 
-    <div class="said" id="recbox" hidden aria-live="polite">
-      <b id="recstate"></b>
-      <p class="hint" id="rechint"></p>
-      <div class="meter" id="meter" hidden aria-hidden="true"><i id="meterbar"></i></div>
-      <div class="recact" id="recact" hidden>
-        <button type="button" id="redo">Record again</button>
-        <button type="button" id="drop">Remove</button>
-      </div>
-    </div>
-    <!-- Typed words for the voice column; the recording is what the red
-         button sends now, and this stays for the table's sake. -->
-    <textarea id="voice" maxlength="2000" hidden></textarea>
 
     <div class="f">
       <label for="name">Name</label>
@@ -233,10 +193,6 @@
   </section>
 </main>
 
-<button type="button" class="rec" id="rec" aria-label="Record by voice">
-  <span class="dot" aria-hidden="true"></span>
-  <span class="rl" id="reclbl">Record<br>by voice</span>
-</button>
 
 <script>
 /* The publishable key is meant to be public: the table it reaches lets it
@@ -244,20 +200,19 @@
    back (supabase/intake.sql). */
 /* Which copy of the form this is. A home-screen app keeps the last page
    it loaded (GitHub Pages says ten minutes; iOS can hold it longer), so
-   a fix published an hour ago may not be the form in Guy's hand — that
-   is how the red button went on opening the keyboard after it had been
-   replaced (2026-09-28). On opening and on coming back into view the form
+   a fix published an hour ago may not be the form in Guy's hand — seen
+   on 2026-09-28, an hour after a change. On opening and on coming back into view the form
    asks for its own latest copy, past every cache, and reloads into it if
-   it is newer — but never over typing or a recording. Bump on every
+   it is newer — but never over typing. Bump on every
    publish. */
-const VERSION = '2026-09-28.5';
+const VERSION = '2026-09-28.6';
 async function checkForUpdate(){
   try{
     const r = await fetch(location.pathname + '?check=' + Date.now(), {cache: 'no-store'});
     if(!r.ok) return;
     const m = /const VERSION = '([^']+)'/.exec(await r.text());
     if(!m || m[1] === VERSION) return;
-    const busy = LISTENING || AUDIO ||
+    const busy =
       [...document.querySelectorAll('#f input:not([type=date]), #f textarea')].some(x => x.value.trim() && x.id !== 'website');
     let tried = ''; try{ tried = sessionStorage.getItem('intake.reloadedTo') || ''; }catch(e){}
     if(busy || tried === m[1]) return;
@@ -271,8 +226,8 @@ async function checkForUpdate(){
 }
 const ENDPOINT = 'https://ncannxpmlcanpoqpsfmk.supabase.co/rest/v1/intake';
 const KEY = 'sb_publishable_JQ7KwLaH_djKOh2k28EGYQ_HHbrZtcl';
-const FIELDS = ['name','email','phone','company','job_title','note','voice','follow_up',
-                'latitude','longitude','accuracy_m','audio','audio_type'];
+const FIELDS = ['name','email','phone','company','job_title','note','follow_up',
+                'latitude','longitude','accuracy_m'];
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MAX_AHEAD_DAYS = 1095;      // mirrors the table's check
 const MAX_ACCURACY_M = 100000;    // mirrors the table's check
@@ -421,12 +376,11 @@ function fail(msg, focus){
 
 function read(){
   const v = {};
-  for(const k of ['name','email','company','job_title','note','voice']){
+  for(const k of ['name','email','company','job_title','note']){
     const s = $(k).value.trim();
     if(s) v[k] = k === 'email' ? s.toLowerCase() : s;
   }
   const p = e164(); if(p) v.phone = p;
-  if(AUDIO){ v.audio = AUDIO.b64; v.audio_type = AUDIO.type; }
   if(when.value) v.follow_up = when.value;
   const fix = freshFix();
   if(fix){
@@ -440,11 +394,9 @@ function read(){
 form.addEventListener('submit', async ev => {
   ev.preventDefault();
   err.classList.remove('show');
-  if(LISTENING) await stopRecording();
   const v = read();
-  /* With a recording, the name and address are read out of it. */
-  if(!v.audio && !v.name) return fail('Please fill in your name — or press the red button and say it.', 'name');
-  if(!v.audio && !v.email && !v.phone) return fail('Please leave an email or a phone number.', 'email');
+  if(!v.name) return fail('Please fill in your name.', 'name');
+  if(!v.email && !v.phone) return fail('Please leave an email or a phone number.', 'email');
   if(v.email && !EMAIL.test(v.email)) return fail('That email address does not look right.', 'email');
   if(v.phone && !/^\+\d{7,15}$/.test(v.phone))
     return fail('That phone number does not look complete — check the country and the number.', 'phone');
@@ -486,8 +438,6 @@ function showDone(v){
         {weekday:'long', day:'numeric', month:'long', year:'numeric'}) + '.'
     : '';
   form.reset();
-  clearRecording();
-  $('rec').hidden = true;
   document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed','false'));
   showPick(false);
   cc.value = COUNTRIES[0][0]; shortLabel(); showSaved();
@@ -497,195 +447,11 @@ function showDone(v){
 
 $('again').addEventListener('click', () => {
   $('done').hidden = true; form.hidden = false;
-  $('rec').hidden = false;
   locate();
   err.classList.remove('show');
   $('name').focus();
 });
 
-/* One press records, one press stops (asked for 2026-09-28, "open the
-   app from the home screen AND use the red button as planned"). A web
-   app opened from the home screen gets no speech recogniser from iOS, but
-   it can record: the phone asks once for the microphone, the audio goes
-   with the entry, and Guy's Mac turns it into words when it collects it —
-   locally, with whisper.cpp — and reads the name, address and the rest
-   out of them. So nothing needs typing: say it, press Add. Two minutes at
-   most, at a speech bitrate, which keeps an entry well under the table's
-   cap. */
-const MAX_SECS = 120;
-const HOMESCREEN_APP = navigator.standalone === true
-  || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
-let AUDIO = null, LISTENING = false, MR = null, STREAM = null, CHUNKS = [], T0 = 0, TICK = 0, DONE = null;
-/* The level meter (2026-09-28): the first real recording from the home
-   screen came back 46 seconds of silence — iOS can hand a home-screen app
-   a microphone that hears nothing. So the form listens to the level while
-   recording, shows it, says so within seconds if nothing comes through,
-   and will not send a silent recording. */
-let ACTX = null, METER = null, PEAK = 0, LOUD_MS = 0, WARNED = false, MIC = null;
-function releaseMic(){
-  if(LISTENING) return;
-  if(MIC) MIC.getTracks().forEach(t => t.stop());
-  MIC = null;
-}
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') releaseMic(); });
-window.addEventListener('pagehide', releaseMic);
-/* Speech at arm's length is about -40 to -20 dB here; the bar runs from
-   -60 (empty) to -20 (full), and -45 counts as heard, so talking in an
-   ordinary voice fills it (2026-09-28: it needed shouting at first). */
-const HEARD = Math.pow(10, -45 / 20);
-const levelPct = rms => rms <= 0 ? 0
-  : Math.max(0, Math.min(100, Math.round((20 * Math.log10(rms) + 60) * 2.5)));
-
-function recUI(state, hint, actions){
-  $('recbox').hidden = !state;
-  $('recstate').textContent = state || '';
-  $('rechint').textContent = hint || '';
-  $('recact').hidden = !actions;
-}
-const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-function recMime(){
-  for(const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'])
-    if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
-  return '';
-}
-function clearRecording(){
-  AUDIO = null;
-  recUI('');
-}
-
-function meterStart(stream){
-  try{
-    ACTX = ACTX || new (window.AudioContext || window.webkitAudioContext)();
-    if(ACTX.state === 'suspended') ACTX.resume();
-    const src = ACTX.createMediaStreamSource(stream);
-    METER = ACTX.createAnalyser();
-    METER.fftSize = 1024;
-    src.connect(METER);
-  }catch(e){ METER = null; }
-  PEAK = 0; LOUD_MS = 0; WARNED = false;
-}
-function meterRead(){
-  if(!METER) return -1;
-  const buf = new Float32Array(METER.fftSize);
-  METER.getFloatTimeDomainData(buf);
-  let sum = 0; for(const v of buf) sum += v * v;
-  return Math.sqrt(sum / buf.length);
-}
-
-async function startRecording(){
-  err.classList.remove('show');
-  /* Made inside the tap: iOS only lets audio start from a press. */
-  try{ ACTX = ACTX || new (window.AudioContext || window.webkitAudioContext)(); ACTX.resume(); }catch(e){}
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){
-    recUI('This phone cannot record here.', 'Type your details in the boxes instead.');
-    return;
-  }
-  try{
-    /* Tell iOS this page records (the Audio Session API, Safari only). */
-    try{ if(navigator.audioSession) navigator.audioSession.type = 'play-and-record'; }catch(e){}
-    /* One microphone for the life of the page: asking again mutes the
-       first one on iOS, with no way to unmute it. It is let go when the
-       app goes to the background, and asked for afresh after. */
-    const live = MIC && MIC.getAudioTracks().some(t => t.readyState === 'live' && !t.muted);
-    if(!live){
-      if(MIC) MIC.getTracks().forEach(t => t.stop());
-      MIC = await navigator.mediaDevices.getUserMedia({audio: {
-        echoCancellation: false, noiseSuppression: false, autoGainControl: true}});
-    }
-    STREAM = MIC;
-  }catch(e){
-    recUI('The microphone is not allowed.',
-      e && e.name === 'NotAllowedError'
-        ? 'Allow the microphone when the phone asks, or type your details in the boxes.'
-        : 'It could not be used just now (' + (e && e.name || 'error') + '). Type your details in the boxes.');
-    return;
-  }
-  meterStart(STREAM);
-  const type = recMime();
-  try{
-    MR = new MediaRecorder(STREAM, Object.assign({audioBitsPerSecond: 32000}, type ? {mimeType: type} : {}));
-  }catch(e){
-    MR = new MediaRecorder(STREAM);
-  }
-  CHUNKS = [];
-  MR.ondataavailable = ev => { if(ev.data && ev.data.size) CHUNKS.push(ev.data); };
-  MR.onstop = finishRecording;
-  MR.start(1000);
-  LISTENING = true; T0 = Date.now();
-  $('rec').classList.add('on');
-  $('reclbl').innerHTML = 'Tap to<br>stop';
-  recUI('Recording… 0:00', 'Say your name, your email or number, and what you do. Tap the red button when you are done.');
-  $('meter').hidden = false;
-  TICK = setInterval(() => {
-    const secs = (Date.now() - T0) / 1000;
-    const lvl = meterRead();
-    if(lvl >= 0){
-      PEAK = Math.max(PEAK, lvl);
-      if(lvl > HEARD) LOUD_MS += 250;
-      $('meterbar').style.width = levelPct(lvl) + '%';
-    }
-    $('recstate').textContent = 'Recording… ' + clock(secs);
-    if(lvl >= 0 && secs > 4 && PEAK < HEARD && !WARNED){
-      WARNED = true;
-      $('rechint').textContent = 'The microphone is not picking anything up. Tap the red button, then Try again — or type your details.';
-    }
-    if(secs >= MAX_SECS) stopRecording();
-  }, 250);
-  window.scrollTo(0, 0);
-}
-
-function stopRecording(){
-  if(!LISTENING) return Promise.resolve();
-  LISTENING = false;
-  clearInterval(TICK);
-  $('rec').classList.remove('on');
-  $('reclbl').innerHTML = 'Record<br>by voice';
-  return new Promise(resolve => { DONE = resolve; try{ MR.stop(); }catch(e){ resolve(); } });
-}
-
-function finishRecording(){
-  const secs = (Date.now() - T0) / 1000;
-  const track = STREAM && STREAM.getAudioTracks()[0];
-  const muted = !!(track && track.muted);
-  STREAM = null;               /* the microphone itself stays, see MIC */
-  $('meter').hidden = true;
-  const type = (MR && MR.mimeType) || recMime() || 'audio/mp4';
-  const blob = new Blob(CHUNKS, {type});
-  const done = () => { const d = DONE; DONE = null; if(d) d(); };
-  if(secs < 1.5 || blob.size < 2000){
-    recUI('That was too short.', 'Press the red button and say it again.');
-    return done();
-  }
-  /* Heard nothing: do not send silence to be read as words. */
-  if(METER && (PEAK < HEARD || LOUD_MS < 600)){
-    releaseMic();              /* a silent one is not worth keeping */
-    recUI('Nothing was heard.',
-      (muted ? 'The phone kept the microphone muted. ' : 'The microphone gave silence. ')
-      + (HOMESCREEN_APP
-          ? 'Press Try again. If it stays silent, open this form in Safari to record — or type your details.'
-          : 'Press Try again, or type your details.'), true);
-    $('redo').textContent = 'Try again';
-    return done();
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const b64 = String(reader.result).split(',')[1] || '';
-    if(b64.length > 1000000){
-      recUI('That was too long to send.', 'Press the red button and keep it under two minutes.');
-      return done();
-    }
-    AUDIO = {b64, type: type.toLowerCase().replace(/\s+/g, ''), secs};
-    recUI('🎙 Recorded ' + clock(secs) + ' ✓',
-      'Press Add. Your name and details are read from what you said — anything you type in the boxes counts too.', true);
-    done();
-  };
-  reader.onerror = () => { recUI('The recording could not be kept.', 'Press the red button and try again.'); done(); };
-  reader.readAsDataURL(blob);
-}
-
-$('rec').addEventListener('click', () => LISTENING ? stopRecording() : startRecording());
-$('redo').addEventListener('click', () => { $('redo').textContent = 'Record again'; clearRecording(); startRecording(); });
-$('drop').addEventListener('click', clearRecording);
 checkForUpdate();
 </script>
 </body>
