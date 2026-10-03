@@ -203,8 +203,10 @@
 
     <!-- A project talked about, set up right here (asked for 2026-10-02).
          The fields are the opp dialog's in Mailroom; on collection they
-         become an opportunity at Open, with this person. Off, nothing in
-         them is sent. -->
+         become an opportunity at Open, with this person. The switch only
+         shows and hides them: whatever is typed is sent either way
+         (2026-10-03, after James's project was lost to a switch turned
+         off before Add). -->
     <label class="toggle" id="projtoggle" for="projon">
       <span>We talked about a project</span>
       <input type="checkbox" id="projon" role="switch" aria-controls="proj">
@@ -274,7 +276,7 @@
    asks for its own latest copy, past every cache, and reloads into it if
    it is newer — but never over typing. Bump on every
    publish. */
-const VERSION = '2026-10-02.1';
+const VERSION = '2026-10-03.1';
 async function checkForUpdate(){
   try{
     const r = await fetch(location.pathname + '?check=' + Date.now(), {cache: 'no-store'});
@@ -484,11 +486,11 @@ function read(){
   }
   const p = e164(); if(p) v.phone = p;
   if(when.value) v.follow_up = when.value;
-  if(projOn.checked){
-    for(const k of PROJECT){ const s = $(k).value.trim(); if(s) v[k] = s; }
-    if($('project_discipline').value) v.project_discipline = $('project_discipline').value;
-    if(projDue.value) v.project_due = projDue.value;
-  }
+  /* Sent whatever the switch says: it folds the fields away, it does
+     not decide whether typing counts. */
+  for(const k of PROJECT){ const s = $(k).value.trim(); if(s) v[k] = s; }
+  if($('project_discipline').value) v.project_discipline = $('project_discipline').value;
+  if(projDue.value) v.project_due = projDue.value;
   const fix = freshFix();
   if(fix){
     v.latitude = +fix.latitude.toFixed(5);
@@ -509,8 +511,11 @@ form.addEventListener('submit', async ev => {
     return fail('That phone number does not look complete — check the country and the number.', 'phone');
   if(v.follow_up && (v.follow_up < when.min || v.follow_up > when.max))
     return fail('Pick a catch-up date from today up to three years ahead.', 'follow_up');
-  if(projOn.checked && !v.project_title)
+  const hasProject = PROJECT.some(k => v[k]) || v.project_discipline || v.project_due;
+  if(hasProject && !v.project_title){
+    projOn.checked = true; showProject();
     return fail('Give the project a title — what it is, in one line.', 'project_title');
+  }
   if(v.project_due && (v.project_due < projDue.min || v.project_due > projDue.max))
     return fail('Pick a project date from today up to three years ahead.', 'project_due');
 
